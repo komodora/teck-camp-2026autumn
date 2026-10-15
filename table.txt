@@ -1,0 +1,132 @@
+
+OK、★付き項目だけでBigQueryに入れる前提なら、「アクセスログの最小分析テーブル」みたいな設計になります。
+以下、DB設計書の形でまとめます。
+
+
+ ■ テーブル名 alb_access_log_min
+
+
+ ■ 目的 ALBログのうち、分析に必要な主要指標（★項目のみ）を抽出し、BigQueryで高速集計・監視できるようにする。
+
+
+ ■ スキーマ定義
+
+1. request_time_utc 
+
+- 論理名：リクエスト受付時刻(UTC) 
+- カラム名：request_time_utc 
+- 型：TIMESTAMP 
+- NULL：NOT NULL 
+- 説明：ログ発生時刻（UTC） 
+
+1. client_ip_port 
+
+- 論理名：クライアントIP:Port 
+- カラム名：client_ip_port 
+- 型：STRING 
+- NULL：NULL許容 
+- 説明：接続元IPとポート 
+
+1. target_ip_port 
+
+- 論理名：ターゲットIP:Port 
+- カラム名：target_ip_port 
+- 型：STRING 
+- NULL：NULL許容 
+- 説明：振り分け先アプリケーション 
+
+1. alb_status_code 
+
+- 論理名：ALBステータスコード 
+- カラム名：alb_status_code 
+- 型：INT64 
+- NULL：NULL許容 
+- 説明：ロードバランサの応答コード 
+
+1. target_status_code 
+
+- 論理名：ターゲットアプリのステータスコード 
+- カラム名：target_status_code 
+- 型：INT64 
+- NULL：NULL許容 
+- 説明：アプリ側のHTTPステータス 
+
+1. request_bytes 
+
+- 論理名：受信バイト数 
+- カラム名：request_bytes 
+- 型：INT64 
+- NULL：NULL許容 
+
+1. response_bytes 
+
+- 論理名：送信バイト数 
+- カラム名：response_bytes 
+- 型：INT64 
+- NULL：NULL許容 
+
+1. http_request 
+
+- 論理名：HTTPメソッド・URL・バージョン 
+- カラム名：http_request 
+- 型：STRING 
+- NULL：NULL許容 
+- 説明：例 "GET /api/v1 HTTP/1.1" 
+
+1. user_agent 
+
+- 論理名：User-Agent 
+- カラム名：user_agent 
+- 型：STRING 
+- NULL：NULL許容 
+
+1. waf_action 
+
+- 論理名：WAF判定結果 
+- カラム名：waf_action 
+- 型：STRING 
+- NULL：NULL許容 
+- 説明：例 "waf,forward" 
+
+
+ ■ パーティション設計（推奨）
+
+- partition field：request_time_utc 
+- partition type：DATE(TIMESTAMP_TRUNC(request_time_utc, DAY)) 
+理由：
+
+- アクセスログ系は日次集計が多い 
+- スキャンコスト削減に直結 
+
+
+ ■ クラスタリング（推奨）
+
+- client_ip_port 
+- alb_status_code 
+- target_status_code 
+理由：
+
+- エラー分析（4xx/5xx） 
+- 特定クライアントの追跡が多い 
+
+
+ ■ サンプルレコード（BigQuery想定）
+{ "request_time_utc": "2026-09-17T02:35:51.336941Z", "client_ip_port": "3.113.248.133:58244", "target_ip_port": "10.200.3.148:3000", "alb_status_code": 200, "target_status_code": 200, "request_bytes": 516, "response_bytes": 7595, "http_request": "GET /api/v1/users HTTP/1.1", "user_agent": "Mozilla/5.0 ...", "waf_action": "waf,forward" }
+
+
+ ■ 代表的な利用クエリ例
+・ステータス別エラー率
+
+- target_status_code >= 400 の割合 
+・トラフィック分析
+
+- request_bytes / response_bytes の日別合計 
+・IP単位の異常検知
+
+- client_ip_port ごとのリクエスト急増 
+・WAF判定分析
+
+- waf_action = "waf" の割合推移 
+
+
+ 必要なら次は、 「この設計を元にしたETL設計（ALBログ→BigQuery変換）」とか 「データマート設計（集計テーブル）」も作れるよ。

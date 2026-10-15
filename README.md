@@ -2,7 +2,7 @@
 
 アクセスログはアップロード画面から送り、パースして保存します。ランキング画面でデータを取得すると、400系の件数と、200系・400系を返したクライアントIPの分布を表示します。分布は地球儀に載ります。
 
-位置の検索に使う `alb-4xx-ranking/data/ipv4-city.bin.gz` はリポジトリに含まれません。下記の手順で作ってから起動してください。
+位置の検索に使う `data/ipv4-city.bin.gz` はリポジトリに含まれません。下記の手順で作ってから起動してください。
 
 ## 位置情報データを作る
 
@@ -14,17 +14,16 @@
 curl -L -o dbip-city-ipv4.csv.gz \
   https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city/dbip-city-ipv4.csv.gz
 
-python3 alb-4xx-ranking/scripts/build-ipv4-locations.py \
+python3 scripts/build-ipv4-locations.py \
   dbip-city-ipv4.csv.gz \
-  alb-4xx-ranking/data/ipv4-city.bin.gz
+  data/ipv4-city.bin.gz
 ```
 
-スクリプトは CSV から IPv4 の範囲、緯度、経度、国コードだけを取り、`alb-4xx-ranking/data/ipv4-city.bin.gz` を書き出します。ダウンロードした CSV はコミットしないでください。
+スクリプトは CSV から IPv4 の範囲、緯度、経度、国コードだけを取り、`data/ipv4-city.bin.gz` を書き出します。ダウンロードした CSV はコミットしないでください。
 
 ## 起動
 
 ```bash
-cd alb-4xx-ranking
 npm install
 npm test
 npm run dev

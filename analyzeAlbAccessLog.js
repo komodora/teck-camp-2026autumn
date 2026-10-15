@@ -49,6 +49,7 @@ function summarizeEntries(entries, skippedLineCount) {
   const rankingByRequest = new Map();
   const statusCounts = new Map();
   const ipSummaries = new Map();
+  const ipRequests = [];
   let clientErrorCount = 0;
   let earliestTimestampMs = null;
   let latestTimestampMs = null;
@@ -56,7 +57,7 @@ function summarizeEntries(entries, skippedLineCount) {
   for (const entry of entries) {
     earliestTimestampMs = earlierTimestamp(earliestTimestampMs, entry.timestampMs);
     latestTimestampMs = laterTimestamp(latestTimestampMs, entry.timestampMs);
-    addIpStatus(ipSummaries, entry);
+    addIpStatus(ipSummaries, ipRequests, entry);
 
     if (!isClientErrorStatus(entry.elbStatusCode)) continue;
 
@@ -74,6 +75,7 @@ function summarizeEntries(entries, skippedLineCount) {
     statusCounts: toStatusCountList(statusCounts),
     ranking: [...rankingByRequest.values()].sort(compareRankingRows),
     ipSummaries: [...ipSummaries.values()].sort(compareIpSummaries),
+    ipRequests,
   };
 }
 
@@ -232,7 +234,7 @@ function isSuccessStatus(statusCode) {
   return statusCode >= 200 && statusCode <= 299;
 }
 
-function addIpStatus(ipSummaries, entry) {
+function addIpStatus(ipSummaries, ipRequests, entry) {
   if (entry.clientIp === "") return;
   const isClientError = isClientErrorStatus(entry.elbStatusCode);
   const isSuccess = isSuccessStatus(entry.elbStatusCode);
@@ -246,6 +248,13 @@ function addIpStatus(ipSummaries, entry) {
   if (isSuccess) summary.status2xxCount += 1;
   if (isClientError) summary.status4xxCount += 1;
   ipSummaries.set(entry.clientIp, summary);
+
+  if (entry.timestampMs === null) return;
+  ipRequests.push({
+    ip: entry.clientIp,
+    timestampMs: entry.timestampMs,
+    statusClass: isClientError ? "4xx" : "2xx",
+  });
 }
 
 function compareIpSummaries(left, right) {

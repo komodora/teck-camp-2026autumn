@@ -1,4 +1,4 @@
-import { LngLatBounds, Map, Marker, NavigationControl, Popup } from "maplibre-gl";
+import { LngLatBounds, Map as MapLibreMap, Marker, NavigationControl, Popup } from "maplibre-gl";
 import { countryName } from "../../../locateIpv4.js";
 import { formatCount } from "../../lib/format.js";
 import styles from "./IpMap.module.css";
@@ -43,8 +43,8 @@ const openStreetMapGlobeStyle = {
   ],
 };
 
-export function drawIpMap(container, circles) {
-  const map = new Map({
+export function drawIpMap(container) {
+  const map = new MapLibreMap({
     container,
     style: openStreetMapGlobeStyle,
     center: [0, 20],
@@ -61,45 +61,94 @@ export function drawIpMap(container, circles) {
   });
   map.addControl(new NavigationControl({ visualizePitch: false }), "top-right");
 
-  if (circles.length === 0) return () => map.remove();
-
-  const largestCount = Math.max(...circles.map((circle) => circle.count));
-  const markers = circles
-    .slice()
-    .sort((left, right) => right.count - left.count)
-    .map((circle) => createCircleMarker(map, circle, largestCount));
-
+  const markerByKey = new Map();
+  let markers = [];
+  let pendingCircles = [];
+  let radiusBasisCount = 1;
+  let pendingFit = [];
   let mapLoaded = false;
+  let hasFitted = false;
+
   const placeWhenReady = () => {
     if (!mapLoaded) return;
     placeCircles(map, markers);
   };
 
+  function applyCircles() {
+    if (!mapLoaded) return;
+    if (!hasFitted && pendingFit.length > 0) {
+      fitLngLats(map, pendingFit);
+      hasFitted = true;
+    }
+    markers = syncCircleMarkers(map, markerByKey, pendingCircles, radiusBasisCount);
+    placeCircles(map, markers);
+  }
+
   map.on("load", () => {
     mapLoaded = true;
-    requestAnimationFrame(() => fitCircles(map, markers));
+    requestAnimationFrame(applyCircles);
   });
   // ドラッグで地球儀を回すと画面上の位置が変わるので、ズーム後だけでなく移動後も置く。
   map.on("zoomend", placeWhenReady);
   map.on("moveend", placeWhenReady);
 
-  return () => map.remove();
+  return {
+    // 時間を進めても地球儀の向きを保つ。初回とデータの取り直しだけ全体が収まる位置へ寄せる。
+    fitLocations(circles) {
+      pendingFit = circles.map((circle) => circleLngLat(circle));
+      hasFitted = false;
+      applyCircles();
+    },
+    setCircles(circles, nextRadiusBasisCount) {
+      pendingCircles = circles;
+      radiusBasisCount = nextRadiusBasisCount;
+      applyCircles();
+    },
+    destroy() {
+      map.remove();
+    },
+  };
 }
 
-function fitCircles(map, markers) {
-  map.resize();
-  if (markers.length === 1) {
-    map.jumpTo({ center: markers[0].origin, zoom: 3 });
-  } else {
-    // 経度をそのまま包むと日付変更線をまたぐ2点がアフリカ側の長い弧になる。近い経度へ寄せて短い方を収める。
-    const anchorLongitude = markers[0].origin[0];
-    const bounds = new LngLatBounds();
-    for (const item of markers) {
-      bounds.extend([longitudeNear(item.origin[0], anchorLongitude), item.origin[1]]);
+function syncCircleMarkers(map, markerByKey, circles, radiusBasisCount) {
+  const nextKeys = new Set();
+  const sorted = circles.slice().sort((left, right) => right.count - left.count);
+
+  for (const circle of sorted) {
+    const key = `${circle.ip}:${circle.statusClass}`;
+    nextKeys.add(key);
+    const radius = circleRadius(circle.count, radiusBasisCount);
+    const existing = markerByKey.get(key);
+    if (existing) {
+      updateCircleMarker(existing, circle, radius);
+      continue;
     }
-    map.fitBounds(bounds, { padding: 56, animate: false, maxZoom: 4 });
+    markerByKey.set(key, createCircleMarker(map, circle, radius));
   }
-  placeCircles(map, markers);
+
+  for (const [key, item] of markerByKey) {
+    if (nextKeys.has(key)) continue;
+    item.marker.remove();
+    markerByKey.delete(key);
+  }
+
+  return sorted.map((circle) => markerByKey.get(`${circle.ip}:${circle.statusClass}`));
+}
+
+function fitLngLats(map, lngLats) {
+  map.resize();
+  if (lngLats.length === 1) {
+    map.jumpTo({ center: lngLats[0], zoom: 3 });
+    return;
+  }
+
+  // 経度をそのまま包むと日付変更線をまたぐ2点がアフリカ側の長い弧になる。近い経度へ寄せて短い方を収める。
+  const anchorLongitude = lngLats[0][0];
+  const bounds = new LngLatBounds();
+  for (const lngLat of lngLats) {
+    bounds.extend([longitudeNear(lngLat[0], anchorLongitude), lngLat[1]]);
+  }
+  map.fitBounds(bounds, { padding: 56, animate: false, maxZoom: 4 });
 }
 
 function longitudeNear(longitude, anchorLongitude) {
@@ -107,16 +156,11 @@ function longitudeNear(longitude, anchorLongitude) {
   return anchorLongitude + delta;
 }
 
-function createCircleMarker(map, circle, largestCount) {
-  const color = circle.statusClass === "4xx" ? CLIENT_ERROR_COLOR : SUCCESS_COLOR;
-  const radius = circleRadius(circle.count, largestCount);
+function createCircleMarker(map, circle, radius) {
   const element = document.createElement("button");
   element.type = "button";
   element.className = styles.circle;
-  element.style.width = `${radius * 2}px`;
-  element.style.height = `${radius * 2}px`;
-  element.style.color = color;
-  element.setAttribute("aria-label", `${circle.ip}の件数`);
+  paintCircleElement(element, circle, radius);
 
   const marker = new Marker({ element, anchor: "center" })
     .setLngLat(circleLngLat(circle))
@@ -126,6 +170,22 @@ function createCircleMarker(map, circle, largestCount) {
     .addTo(map);
 
   return { marker, radius, origin: circleLngLat(circle) };
+}
+
+function updateCircleMarker(item, circle, radius) {
+  paintCircleElement(item.marker.getElement(), circle, radius);
+  item.radius = radius;
+  const popup = item.marker.getPopup();
+  popup.setHTML(popupHtml(circle));
+  popup.setOffset(radius);
+}
+
+function paintCircleElement(element, circle, radius) {
+  const color = circle.statusClass === "4xx" ? CLIENT_ERROR_COLOR : SUCCESS_COLOR;
+  element.style.width = `${radius * 2}px`;
+  element.style.height = `${radius * 2}px`;
+  element.style.color = color;
+  element.setAttribute("aria-label", `${circle.ip}の件数`);
 }
 
 function placeCircles(map, markers) {

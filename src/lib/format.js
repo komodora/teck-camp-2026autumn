@@ -24,6 +24,23 @@ export function formatPercent(ratio) {
   return percentFormat.format(ratio);
 }
 
+const tokyoMinute = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+export function formatMinuteRange(startMs, endMs) {
+  const start = minuteParts(startMs);
+  const end = minuteParts(endMs);
+  if (start.date === end.date) return `${start.date} ${start.time} 〜 ${end.time}`;
+  return `${start.date} ${start.time} 〜 ${end.date} ${end.time}`;
+}
+
 export function formatTimeRange(earliestTimestampMs, latestTimestampMs) {
   if (earliestTimestampMs === null || latestTimestampMs === null) return "—";
 
@@ -31,6 +48,15 @@ export function formatTimeRange(earliestTimestampMs, latestTimestampMs) {
   const end = tokyoDateAndTime(latestTimestampMs);
   if (start.date === end.date) return `${start.date}\n${start.time} 〜 ${end.time}`;
   return `${start.date} ${start.time}\n${end.date} ${end.time}`;
+}
+
+function minuteParts(timestampMs) {
+  const parts = tokyoMinute.formatToParts(timestampMs);
+  const part = (type) => parts.find((item) => item.type === type)?.value ?? "";
+  return {
+    date: `${part("year")}/${part("month")}/${part("day")}`,
+    time: `${part("hour")}:${part("minute")}`,
+  };
 }
 
 function tokyoDateAndTime(timestampMs) {

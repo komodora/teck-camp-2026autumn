@@ -53,7 +53,12 @@ export function Report() {
       {analysis && (
         <section className={styles.results}>
           <Summary analysis={analysis} sourceLabel="保存済みのアクセスログ" />
-          <IpMap ipSummaries={analysis.ipSummaries} />
+          <IpMap
+            ipSummaries={analysis.ipSummaries}
+            ipRequests={analysis.ipRequests}
+            earliestTimestampMs={analysis.earliestTimestampMs}
+            latestTimestampMs={analysis.latestTimestampMs}
+          />
           <Ranking analysis={analysis} />
         </section>
       )}

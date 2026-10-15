@@ -23,6 +23,19 @@
   line-height: 1.7;
 }
 
-.results {
-  margin-top: 28px;
+.nav {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.nav a {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.nav a[aria-current="page"] {
+  color: var(--ink);
 }

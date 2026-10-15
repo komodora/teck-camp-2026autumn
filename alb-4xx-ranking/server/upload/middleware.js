@@ -1,15 +1,11 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { HttpError } from "../../../alb-log-ingest/src/httpError.js";
-import { ingestLogText } from "../../../alb-log-ingest/src/ingest/pipeline.js";
-import { sendJson } from "../../../alb-log-ingest/src/sendJson.js";
-import { createNdjsonStore } from "../../../alb-log-ingest/src/store/ndjsonStore.js";
+import { HttpError } from "../httpError.js";
+import { createNdjsonStore, defaultUploadDirectory } from "../ingest/ndjsonStore.js";
+import { ingestLogText } from "../ingest/pipeline.js";
+import { sendJson } from "../sendJson.js";
 import { handleUploadRequest } from "./router.js";
 
-const defaultDataDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../alb-log-ingest/data");
-
 export function createUploadMiddleware({
-  store = createNdjsonStore(defaultDataDirectory),
+  store = createNdjsonStore(defaultUploadDirectory),
   ingestLogText: ingest = ingestLogText,
   createUploadId,
 } = {}) {

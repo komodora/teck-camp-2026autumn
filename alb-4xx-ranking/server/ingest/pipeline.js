@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { structureAlbAccessLog } from "../parse/structureAlbAccessLog.js";
+import { structureAlbAccessLog } from "./structureAlbAccessLog.js";
 
 export async function ingestLogText({ logText, store, createUploadId = createDefaultUploadId }) {
   const structured = structureAlbAccessLog(logText);

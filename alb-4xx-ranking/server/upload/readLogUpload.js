@@ -1,6 +1,6 @@
 import { promisify } from "node:util";
 import { gunzip } from "node:zlib";
-import { HttpError } from "../../../alb-log-ingest/src/httpError.js";
+import { HttpError } from "../httpError.js";
 
 const gunzipAsync = promisify(gunzip);
 const MAX_BODY_BYTES = 32 * 1024 * 1024;

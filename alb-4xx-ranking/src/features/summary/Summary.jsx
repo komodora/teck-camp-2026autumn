@@ -1,7 +1,7 @@
 import { formatCount, formatPercent, formatTimeRange } from "../../lib/format.js";
 import styles from "./Summary.module.css";
 
-export function Summary({ analysis, fileNames }) {
+export function Summary({ analysis, sourceLabel }) {
   const clientErrorRate =
     analysis.parsedLineCount === 0 ? 0 : analysis.clientErrorCount / analysis.parsedLineCount;
   const skippedNote =
@@ -10,7 +10,7 @@ export function Summary({ analysis, fileNames }) {
   return (
     <>
       <p className={styles.fileNote}>
-        {fileNames.join("、")}
+        {sourceLabel}
         {skippedNote}
       </p>
       <div className={styles.summary}>

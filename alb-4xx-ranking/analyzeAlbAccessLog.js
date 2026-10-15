@@ -12,14 +12,8 @@ const MIN_FIELD_COUNT = REQUEST_LINE_INDEX + 1;
 const ALB_CONNECTION_TYPES = new Set(["http", "https", "h2", "grpcs", "ws", "wss"]);
 
 export function analyzeAlbAccessLog(logText) {
-  const rankingByRequest = new Map();
-  const statusCounts = new Map();
-  const ipSummaries = new Map();
-  let parsedLineCount = 0;
+  const entries = [];
   let skippedLineCount = 0;
-  let clientErrorCount = 0;
-  let earliestTimestampMs = null;
-  let latestTimestampMs = null;
 
   for (const line of logText.split(/\r?\n/)) {
     if (line.trim() === "") continue;
@@ -29,8 +23,37 @@ export function analyzeAlbAccessLog(logText) {
       skippedLineCount += 1;
       continue;
     }
+    entries.push(entry);
+  }
 
-    parsedLineCount += 1;
+  return summarizeEntries(entries, skippedLineCount);
+}
+
+export function analyzeAccessLogRecords(records) {
+  const entries = [];
+  let skippedRecordCount = 0;
+
+  for (const record of records) {
+    const entry = entryFromAccessLogRecord(record);
+    if (!entry) {
+      skippedRecordCount += 1;
+      continue;
+    }
+    entries.push(entry);
+  }
+
+  return summarizeEntries(entries, skippedRecordCount);
+}
+
+function summarizeEntries(entries, skippedLineCount) {
+  const rankingByRequest = new Map();
+  const statusCounts = new Map();
+  const ipSummaries = new Map();
+  let clientErrorCount = 0;
+  let earliestTimestampMs = null;
+  let latestTimestampMs = null;
+
+  for (const entry of entries) {
     earliestTimestampMs = earlierTimestamp(earliestTimestampMs, entry.timestampMs);
     latestTimestampMs = laterTimestamp(latestTimestampMs, entry.timestampMs);
     addIpStatus(ipSummaries, entry);
@@ -43,7 +66,7 @@ export function analyzeAlbAccessLog(logText) {
   }
 
   return {
-    parsedLineCount,
+    parsedLineCount: entries.length,
     skippedLineCount,
     clientErrorCount,
     earliestTimestampMs,
@@ -51,6 +74,23 @@ export function analyzeAlbAccessLog(logText) {
     statusCounts: toStatusCountList(statusCounts),
     ranking: [...rankingByRequest.values()].sort(compareRankingRows),
     ipSummaries: [...ipSummaries.values()].sort(compareIpSummaries),
+  };
+}
+
+function entryFromAccessLogRecord(record) {
+  if (typeof record.alb_status_code !== "number") return null;
+  if (typeof record.http_request !== "string") return null;
+
+  const request = parseHttpRequestLine(record.http_request);
+  if (!request) return null;
+
+  return {
+    elbStatusCode: record.alb_status_code,
+    clientIp: parseClientIp(record.client_ip_port ?? ""),
+    timestampMs: parseTimestamp(record.request_time_utc ?? ""),
+    method: request.method,
+    path: request.path,
+    host: request.host,
   };
 }
 

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { structureAlbAccessLog } from "../src/parse/structureAlbAccessLog.js";
+import { structureAlbAccessLog } from "./structureAlbAccessLog.js";
 
 const sampleLogPath = new URL(
-  "../../290477247783_elasticloadbalancing_ap-northeast-1_app.Prd-We-AppAl-4tDe6j6pTNtS.8a25603c2c19db4c_20260917T0240Z_13.112.177.83_3bnumqmt.log",
+  "../../../290477247783_elasticloadbalancing_ap-northeast-1_app.Prd-We-AppAl-4tDe6j6pTNtS.8a25603c2c19db4c_20260917T0240Z_13.112.177.83_3bnumqmt.log",
   import.meta.url,
 );
 

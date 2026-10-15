@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { analyzeAlbAccessLog } from "./analyzeAlbAccessLog.js";
+import { analyzeAccessLogRecords, analyzeAlbAccessLog } from "./analyzeAlbAccessLog.js";
+import { structureAlbAccessLog } from "./server/ingest/structureAlbAccessLog.js";
 
 const sampleLogPath = new URL(
   "../290477247783_elasticloadbalancing_ap-northeast-1_app.Prd-We-AppAl-4tDe6j6pTNtS.8a25603c2c19db4c_20260917T0240Z_13.112.177.83_3bnumqmt.log",
@@ -39,6 +40,25 @@ test("サンプルログの400系をメソッドとパスでランキングす�
   const syntheticMonitor = analysis.ipSummaries.find((summary) => summary.ip === "3.113.248.133");
   assert.equal(syntheticMonitor.status2xxCount, 99);
   assert.equal(syntheticMonitor.status4xxCount, 0);
+});
+
+test("保存済みレコードからも同じランキングになる", () => {
+  const logText = readFileSync(sampleLogPath, "utf8");
+  const fromText = analyzeAlbAccessLog(logText);
+  const fromRecords = analyzeAccessLogRecords(structureAlbAccessLog(logText).records);
+
+  assert.equal(fromRecords.parsedLineCount, fromText.parsedLineCount);
+  assert.equal(fromRecords.skippedLineCount, fromText.skippedLineCount);
+  assert.equal(fromRecords.clientErrorCount, fromText.clientErrorCount);
+  assert.deepEqual(fromRecords.statusCounts, fromText.statusCounts);
+  assert.deepEqual(
+    fromRecords.ranking.map((row) => [row.method, row.path, row.count]),
+    fromText.ranking.map((row) => [row.method, row.path, row.count]),
+  );
+  assert.deepEqual(
+    fromRecords.ipSummaries.map((summary) => [summary.ip, summary.status2xxCount, summary.status4xxCount]),
+    fromText.ipSummaries.map((summary) => [summary.ip, summary.status2xxCount, summary.status4xxCount]),
+  );
 });
 
 test("引用符内の空白をフィールド境界にしない", () => {

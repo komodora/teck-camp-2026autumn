@@ -45,6 +45,17 @@
   display: none;
 }
 
+.saved {
+  margin: 12px 0 0;
+  line-height: 1.6;
+}
+
+.saved a {
+  margin-left: 8px;
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .readError {
   margin-top: 12px;
   color: var(--accent);

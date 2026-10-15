@@ -1,4 +1,4 @@
-import { sendJson } from "../../../alb-log-ingest/src/sendJson.js";
+import { sendJson } from "../sendJson.js";
 import { logUploadPath } from "../../src/features/log-upload/uploadPath.js";
 import { readLogUpload } from "./readLogUpload.js";
 

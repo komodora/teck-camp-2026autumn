@@ -1,40 +1,34 @@
 import { useState } from "react";
-import { analyzeAlbAccessLog } from "../../../analyzeAlbAccessLog.js";
+import { reportPagePath } from "../../pages.js";
 import styles from "./LogUpload.module.css";
-import { readLogFiles } from "./readLogFiles.js";
 import { logUploadPath } from "./uploadPath.js";
 
-export function LogUpload({ onAnalyzed }) {
+export function LogUpload() {
   const [isDragging, setIsDragging] = useState(false);
   const [readError, setReadError] = useState("");
+  const [savedRecordCount, setSavedRecordCount] = useState(null);
 
-  async function analyzeSelectedLogs(files) {
+  async function saveSelectedLogs(files) {
     if (files.length === 0) return;
 
     setReadError("");
+    setSavedRecordCount(null);
     try {
-      await uploadLogFiles(files);
-      const logText = await readLogFiles(files);
-      publishAnalysis(analyzeAlbAccessLog(logText), files.map((file) => file.name));
+      const recordCount = await saveLogFiles(files);
+      if (recordCount === 0) {
+        setReadError("ALB アクセスログとして読み取れる行がありませんでした。");
+        return;
+      }
+      setSavedRecordCount(recordCount);
     } catch (error) {
-      setReadError(error instanceof Error ? error.message : "ログを読めませんでした。");
+      setReadError(error instanceof Error ? error.message : "ログを保存できませんでした。");
     }
-  }
-
-  function publishAnalysis(analysis, fileNames) {
-    if (analysis.parsedLineCount === 0) {
-      setReadError("ALB アクセスログとして読み取れる行がありませんでした。");
-      onAnalyzed(null, []);
-      return;
-    }
-
-    onAnalyzed(analysis, fileNames);
   }
 
   function handleFileInputChange(event) {
     const files = [...event.target.files];
     event.target.value = "";
-    analyzeSelectedLogs(files);
+    saveSelectedLogs(files);
   }
 
   function handleDragOver(event) {
@@ -49,7 +43,7 @@ export function LogUpload({ onAnalyzed }) {
   function handleDrop(event) {
     event.preventDefault();
     setIsDragging(false);
-    analyzeSelectedLogs([...event.dataTransfer.files]);
+    saveSelectedLogs([...event.dataTransfer.files]);
   }
 
   const dropzoneClassName = isDragging ? `${styles.dropzone} ${styles.dragging}` : styles.dropzone;
@@ -61,12 +55,18 @@ export function LogUpload({ onAnalyzed }) {
       </h2>
       <div className={dropzoneClassName} tabIndex={0} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
         <p className={styles.title}>ログファイルをドロップ</p>
-        <p className={styles.note}>.log / .gz に対応。複数ファイルはまとめて集計します。</p>
+        <p className={styles.note}>.log / .gz に対応。複数ファイルはまとめて保存します。</p>
         <label className={styles.fileButton}>
           ファイルを選択
           <input type="file" accept=".log,.gz,.txt,text/plain" multiple onChange={handleFileInputChange} />
         </label>
       </div>
+      {savedRecordCount !== null && (
+        <p className={styles.saved}>
+          {savedRecordCount} 件を保存しました。
+          <a href={reportPagePath}>ランキング画面へ</a>
+        </p>
+      )}
       {readError !== "" && (
         <p className={styles.readError} role="alert">
           {readError}
@@ -76,13 +76,15 @@ export function LogUpload({ onAnalyzed }) {
   );
 }
 
-async function uploadLogFiles(files) {
+async function saveLogFiles(files) {
+  let recordCount = 0;
   for (const file of files) {
-    await uploadLogFile(file);
+    recordCount += await saveLogFile(file);
   }
+  return recordCount;
 }
 
-async function uploadLogFile(file) {
+async function saveLogFile(file) {
   const body = new FormData();
   body.append("file", file, file.name);
   const response = await fetch(logUploadPath, { method: "POST", body });
@@ -90,6 +92,7 @@ async function uploadLogFile(file) {
   if (!response.ok) {
     throw new Error(payload?.error ?? `${file.name} をアップロードできませんでした。`);
   }
+  return payload?.recordCount ?? 0;
 }
 
 async function readUploadResponse(response) {

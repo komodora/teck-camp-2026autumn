@@ -5,8 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
-import { startServer } from "../../alb-log-ingest/src/server.js";
-import { createNdjsonStore } from "../../alb-log-ingest/src/store/ndjsonStore.js";
+import { createNdjsonStore } from "./ingest/ndjsonStore.js";
 import { createUploadMiddleware } from "./upload/middleware.js";
 import { logUploadPath } from "../src/features/log-upload/uploadPath.js";
 
@@ -36,11 +35,10 @@ const sampleLine = [
   '"waf,forward"',
 ].join(" ");
 
-test("ランキング側のアップロードURLで保存し、取り込み側から取得できる", async () => {
+test("アップロードURLでパースして保存する", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "alb-log-upload-"));
   const store = createNdjsonStore(directory);
   const uploadServer = await startUploadServer(store);
-  const recordsServer = await startServer({ port: 0, store });
 
   try {
     const uploaded = await postFile(uploadServer, { fileName: "access.log", body: Buffer.from(`${sampleLine}\n`) });
@@ -49,13 +47,11 @@ test("ランキング側のアップロードURLで保存し、取り込み側�
     assert.equal(uploaded.body.recordCount, 1);
     assert.equal(uploaded.body.skippedLineCount, 0);
 
-    const listed = await getJson(recordsServer, `/access-logs?uploadId=${uploaded.body.uploadId}`);
-    assert.equal(listed.statusCode, 200);
-    assert.equal(listed.body.records[0].http_request, "GET https://example.com:443/missing page HTTP/2.0");
-    assert.equal(listed.body.records[0].waf_action, "waf,forward");
+    const records = await store.load(uploaded.body.uploadId);
+    assert.equal(records[0].http_request, "GET https://example.com:443/missing page HTTP/2.0");
+    assert.equal(records[0].waf_action, "waf,forward");
   } finally {
     await closeServer(uploadServer);
-    await closeServer(recordsServer);
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -64,7 +60,6 @@ test("gzip をアップロードURLで展開する", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "alb-log-upload-"));
   const store = createNdjsonStore(directory);
   const uploadServer = await startUploadServer(store);
-  const recordsServer = await startServer({ port: 0, store });
   const later = sampleLine.replace("2026-09-17T02:35:51.336941Z", "2026-09-17T03:00:00.000000Z");
   const earlier = sampleLine.replace("2026-09-17T02:35:51.336941Z", "2026-09-17T01:00:00.000000Z");
 
@@ -76,14 +71,13 @@ test("gzip をアップロードURLで展開する", async () => {
     assert.equal(uploaded.statusCode, 201);
     assert.equal(uploaded.body.recordCount, 2);
 
-    const listed = await getJson(recordsServer, "/access-logs");
+    const records = await store.load(uploaded.body.uploadId);
     assert.deepEqual(
-      listed.body.records.map((record) => record.request_time_utc),
-      ["2026-09-17T01:00:00.000000Z", "2026-09-17T03:00:00.000000Z"],
+      records.map((record) => record.request_time_utc),
+      ["2026-09-17T03:00:00.000000Z", "2026-09-17T01:00:00.000000Z"],
     );
   } finally {
     await closeServer(uploadServer);
-    await closeServer(recordsServer);
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -122,10 +116,6 @@ function postFile(server, { fileName, body }) {
     },
     body: payload,
   });
-}
-
-function getJson(server, requestPath) {
-  return sendJsonRequest(server, { method: "GET", path: requestPath });
 }
 
 function sendJsonRequest(server, { method, path: requestPath, headers, body }) {

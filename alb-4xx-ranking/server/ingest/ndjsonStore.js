@@ -1,7 +1,10 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const UPLOAD_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,80}$/;
+
+export const defaultUploadDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../data/uploads");
 
 export function createNdjsonStore(directory) {
   return {

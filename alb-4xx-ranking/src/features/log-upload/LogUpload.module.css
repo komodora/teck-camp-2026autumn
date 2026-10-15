@@ -1,0 +1,51 @@
+.upload {
+  margin-top: 28px;
+}
+
+.dropzone {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 28px;
+  border: 1.5px dashed #c9b8a6;
+  border-radius: 18px;
+  background: rgba(255, 253, 249, 0.72);
+}
+
+.dragging {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.note,
+.readError {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.fileButton {
+  margin-top: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fffdf9;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fileButton input {
+  display: none;
+}
+
+.readError {
+  margin-top: 12px;
+  color: var(--accent);
+}

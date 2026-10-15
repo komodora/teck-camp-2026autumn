@@ -1,0 +1,165 @@
+.panel {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: end;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filters button,
+.pathSearch input {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+
+.filters button {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.filters button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+
+.pathSearch {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.pathSearch input {
+  min-width: 220px;
+  padding: 8px 12px;
+  border-radius: 12px;
+}
+
+.meta,
+.empty {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.meta {
+  margin: 14px 0;
+}
+
+.tableScroll {
+  overflow-x: auto;
+}
+
+.panel table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.panel th,
+.panel td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.panel th {
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.panel td {
+  font-variant-numeric: tabular-nums;
+}
+
+.numeric,
+.count,
+.share {
+  text-align: right;
+}
+
+.rank,
+.count,
+.share {
+  white-space: nowrap;
+}
+
+.method {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.path {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.host {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.statusList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.statusChip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.countBar {
+  display: block;
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: #efe7df;
+}
+
+.countBar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--bar);
+}
+
+.empty {
+  padding: 28px 0 12px;
+}

@@ -1,0 +1,51 @@
+.fileNote {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.card {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.card strong {
+  display: block;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.55rem;
+  letter-spacing: -0.03em;
+}
+
+.period strong {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.4;
+  white-space: pre-line;
+}
+
+.emphasis strong {
+  color: var(--accent);
+}
+
+@media (max-width: 800px) {
+  .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -1,0 +1,16 @@
+.ip-popup-wrap .maplibregl-popup-content {
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: #1c1916;
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  line-height: 1.55;
+  box-shadow: 0 12px 28px rgba(58, 42, 28, 0.12);
+}
+
+.ip-popup {
+  line-height: 1.55;
+}
+
+.popup-note {
+  color: #6f675f;
+}

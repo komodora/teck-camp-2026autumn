@@ -25,8 +25,5 @@ python3 scripts/build-ipv4-locations.py \
 
 ```bash
 npm install
-npm test
 npm run dev
 ```
-
-`npm test` の位置情報テストも、同じ `data/ipv4-city.bin.gz` を読みます。

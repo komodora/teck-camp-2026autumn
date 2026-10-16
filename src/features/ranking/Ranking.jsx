@@ -5,6 +5,8 @@ import { RankingTable } from "./RankingTable.jsx";
 import { StatusFilters } from "./StatusFilters.jsx";
 import { rankingShareTotal, visibleRankingRows } from "./visibleRanking.js";
 
+const COLLAPSE_THRESHOLD = 10;
+
 export function Ranking({ analysis }) {
   const [selectedStatusCode, setSelectedStatusCode] = useState(null);
   const [pathQuery, setPathQuery] = useState("");
@@ -17,6 +19,8 @@ export function Ranking({ analysis }) {
   const normalizedPathQuery = pathQuery.trim().toLowerCase();
   const rows = visibleRankingRows(analysis.ranking, selectedStatusCode, normalizedPathQuery);
   const shareTotal = rankingShareTotal(rows, analysis, selectedStatusCode, normalizedPathQuery);
+  const mainRows = rows.filter((row) => row.count > COLLAPSE_THRESHOLD);
+  const collapsedRows = rows.filter((row) => row.count <= COLLAPSE_THRESHOLD);
 
   function selectStatus(statusCode) {
     setSelectedStatusCode(statusCode);
@@ -50,7 +54,17 @@ export function Ranking({ analysis }) {
       {rows.length === 0 ? (
         <p className={styles.empty}>{emptyRankingMessage(analysis.clientErrorCount)}</p>
       ) : (
-        <RankingTable rows={rows} shareTotal={shareTotal} selectedStatusCode={selectedStatusCode} />
+        <>
+          {mainRows.length > 0 && (
+            <RankingTable rows={mainRows} shareTotal={shareTotal} selectedStatusCode={selectedStatusCode} />
+          )}
+          {collapsedRows.length > 0 && (
+            <details className={styles.collapsed}>
+              <summary>件数が{COLLAPSE_THRESHOLD}件以下のパス({collapsedRows.length}件)</summary>
+              <RankingTable rows={collapsedRows} shareTotal={shareTotal} selectedStatusCode={selectedStatusCode} />
+            </details>
+          )}
+        </>
       )}
     </div>
   );

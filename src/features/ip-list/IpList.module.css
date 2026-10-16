@@ -23,6 +23,21 @@
   overflow-x: auto;
 }
 
+.collapsed {
+  margin-top: 16px;
+}
+
+.collapsed summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.collapsed .tableScroll {
+  margin-top: 12px;
+}
+
 .panel table {
   width: 100%;
   border-collapse: collapse;

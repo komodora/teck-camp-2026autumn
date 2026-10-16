@@ -54,6 +54,8 @@ ALBアクセスログをアップロードし、400系(クライアントエラ�
 
 `/report` 画面に埋め込まれた `src/features/chat`(`Chat.jsx`)が、質問と会話履歴を `POST /chat`(`server/chat/`)へ送る。サーバー側は `GET /access-logs` と同じく毎回 `store.loadAll()` で全レコードを読み直し、`analyzeAlbAccessLog.js` の `analyzeAccessLogRecords` で集計し、上位IP(4xx件数降順、上位50件)に `locateIpv4.js` で位置情報を付与して、Claudeへのプロンプトコンテキストを組み立てる(`server/chat/buildAnalysisContext.js`)。IPv4位置テーブルはモジュールレベルで一度だけ読み込んでメモ化する。`server/chat/askClaude.js` が `@anthropic-ai/sdk` を使って `claude-sonnet-5-5` にこのコンテキストと質問を渡し、日本語の回答を1件返す。画面側は会話履歴をReact stateで保持するだけで、サーバー側に集計結果を保存することはしない。
 
+Claudeには2種類のtool useを渡す。1つは `server/chat/accessLogSearchTool.js`(IP・パス・ステータスコードで生ログに近い個別リクエストを検索)。もう1つは外部APIが `source=external` のときだけ追加される、`server/chat/albLogMcpTools.js` 経由の `alb-log-mcp`(エラー率・ステータス別集計・上位アクセス元/リクエスト/User-Agentを返すMCPサーバー、`@modelcontextprotocol/sdk` の `StreamableHTTPClientTransport` で接続、APIキーは `ALB_QUERY_API_KEY` を共用)。ツール一覧はMCPサーバーから一度だけ取得してメモ化する。
+
 ### 画面構成とルーティング
 
 React Router等は使わず、`src/pages.js` が `window.location.pathname` を見てページ種別(`"upload"` / `"report"` / `"ip-detail"`)を判定し、`src/App.jsx` がそれに応じてコンポーネントを切り替えるだけの自作ルータ。画面遷移は通常の `<a href>` によるフルページ遷移で、クライアントサイドの状態は画面間で共有されない(各ページが自分で保存済みログを取得し直す)。Viteのdev/previewはSPA fallbackのため、どのパスでも `index.html` が返る。

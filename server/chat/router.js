@@ -27,7 +27,7 @@ export async function handleChatRequest(
 
   const contextForPrompt = await buildAnalysisContext(store, loadOptions);
   const searchAccessLogs = createAccessLogSearch(store, loadOptions);
-  const reply = await ask({ message, history, contextForPrompt, searchAccessLogs });
+  const reply = await ask({ message, history, contextForPrompt, searchAccessLogs, includeMcpTools: isExternal });
   sendJson(response, 200, { reply });
   return true;
 }

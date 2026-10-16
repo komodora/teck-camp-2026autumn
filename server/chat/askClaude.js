@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { HttpError } from "../httpError.js";
 import { ACCESS_LOG_SEARCH_TOOL } from "./accessLogSearchTool.js";
+import { callMcpTool, listMcpTools } from "./albLogMcpTools.js";
 
 const MODEL = "claude-sonnet-5-5";
 const MAX_TOKENS = 2000;
@@ -19,12 +20,13 @@ function getClient() {
   return client;
 }
 
-export async function askClaude({ message, history, contextForPrompt, searchAccessLogs }) {
+export async function askClaude({ message, history, contextForPrompt, searchAccessLogs, includeMcpTools }) {
   const system = buildSystemPrompt(contextForPrompt);
   const messages = [...history, { role: "user", content: message }];
+  const tools = includeMcpTools ? [ACCESS_LOG_SEARCH_TOOL, ...(await listMcpTools())] : [ACCESS_LOG_SEARCH_TOOL];
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-    const response = await createMessage({ system, messages });
+    const response = await createMessage({ system, messages, tools });
     if (response.stop_reason !== "tool_use") return textFromResponse(response);
 
     messages.push({ role: "assistant", content: response.content });
@@ -34,7 +36,7 @@ export async function askClaude({ message, history, contextForPrompt, searchAcce
   throw new HttpError(502, "応答の生成が完了しませんでした。質問を分けて試してください。");
 }
 
-async function createMessage({ system, messages }) {
+async function createMessage({ system, messages, tools }) {
   try {
     return await getClient().messages.create({
       model: MODEL,
@@ -42,7 +44,7 @@ async function createMessage({ system, messages }) {
       output_config: { effort: "low" },
       system,
       messages,
-      tools: [ACCESS_LOG_SEARCH_TOOL],
+      tools,
     });
   } catch (error) {
     throw toHttpError(error);
@@ -53,17 +55,22 @@ async function resolveToolResults(content, searchAccessLogs) {
   const toolUseBlocks = content.filter((block) => block.type === "tool_use");
   const results = [];
   for (const block of toolUseBlocks) {
-    const output = await runTool(block, searchAccessLogs);
-    results.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(output) });
+    results.push({ type: "tool_result", tool_use_id: block.id, content: await runTool(block, searchAccessLogs) });
   }
   return results;
 }
 
 async function runTool(block, searchAccessLogs) {
-  if (block.name !== ACCESS_LOG_SEARCH_TOOL.name) {
-    return { error: "unknown tool" };
+  if (block.name === ACCESS_LOG_SEARCH_TOOL.name) {
+    return JSON.stringify(await searchAccessLogs(block.input ?? {}));
   }
-  return await searchAccessLogs(block.input ?? {});
+
+  try {
+    return await callMcpTool(block.name, block.input ?? {});
+  } catch (error) {
+    console.error(error);
+    return JSON.stringify({ error: "ツールの実行に失敗しました。" });
+  }
 }
 
 function textFromResponse(response) {
@@ -81,6 +88,7 @@ function buildSystemPrompt(contextForPrompt) {
     "以下のJSONは、現在保存されている全アクセスログを集計した結果です。",
     "基本的にはこのJSONの範囲内でわかることを根拠にしてください。",
     "個別リクエストのタイムスタンプ・User-Agent・レスポンスバイト数など、このJSON(集計結果)だけではわからない詳細を聞かれた場合は、search_access_logs ツールで生ログに近い個別リクエストを検索してから回答してください。",
+    "get_error_rate / get_status_summary / get_daily_error_rate / get_top_error_clients / get_top_error_requests / get_top_user_agents が使える場合、このJSONの対象期間を超える期間や、特定の日付範囲でのエラー率・ステータス別集計・上位アクセス元・上位User-Agentを聞かれたときはこれらのツールを使って計算してから回答してください。",
     "ツールを使っても判断できないことは、推測せずに「このデータからはわかりません」と答えてください。",
     "",
     "```json",

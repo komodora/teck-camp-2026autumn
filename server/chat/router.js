@@ -2,6 +2,7 @@ import { sendJson } from "../sendJson.js";
 import { HttpError } from "../httpError.js";
 import { readJsonBody } from "../readJsonBody.js";
 import { chatPath } from "../../src/features/chat/chatPath.js";
+import { createAccessLogSearch } from "./accessLogSearchTool.js";
 import { buildAnalysisContext } from "./buildAnalysisContext.js";
 import { askClaude } from "./askClaude.js";
 
@@ -15,7 +16,8 @@ export async function handleChatRequest(request, response, { store, askClaude: a
   const history = Array.isArray(body?.history) ? body.history : [];
 
   const contextForPrompt = await buildAnalysisContext(store);
-  const reply = await ask({ message, history, contextForPrompt });
+  const searchAccessLogs = createAccessLogSearch(store);
+  const reply = await ask({ message, history, contextForPrompt, searchAccessLogs });
   sendJson(response, 200, { reply });
   return true;
 }

@@ -1,8 +1,6 @@
 import { focusZoom, overviewZoom } from "./globeZoom.js";
 import { angularDistanceDegrees } from "./hotspot.js";
 
-// 同じ地点に最低これだけ留まる。サンプルでは3秒だと再生1分に18回動き、7割が大陸をまたいで目が回った。
-const MIN_DWELL_MS = 6000;
 // 大陸をまたぐ移動は、ばねで寄せると地球儀が勢いよく回りすぎる。一度引いてから寄せる。
 const FLY_THRESHOLD_DEGREES = 60;
 const FLY_DURATION_MS = 2000;
@@ -13,6 +11,8 @@ const SPRING_RATE = 3.5;
 const SETTLED_DEGREES = 0.01;
 const SETTLED_DEGREES_PER_SECOND = 0.05;
 const SETTLED_ZOOM = 0.002;
+// 先読みの計画で「着いた」とみなす中心からの角度。寄った状態で約50px。
+const ARRIVED_DEGREES = 2;
 // タブが裏に回って間が空いても、1フレームで大きく飛ばない。
 const MAX_FRAME_SECONDS = 0.05;
 const MAX_LATITUDE = 80;
@@ -25,10 +25,10 @@ export function createCameraFollow(map, { onInterrupted }) {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   let enabled = true;
   let target = null;
-  let spinning = false;
+  // 行き先に着くまでは自転しない。リクエストの無い時点を挟んでも、移動の途中で回り始めない。
+  let arrived = false;
+  let spinRequested = false;
   let velocity = AT_REST;
-  let lastAimAt = -Infinity;
-  let pendingTimer = 0;
   let frame = 0;
   let previousTime = 0;
 
@@ -41,11 +41,9 @@ export function createCameraFollow(map, { onInterrupted }) {
   for (const type of USER_MOVE_EVENTS) map.on(type, interrupt);
 
   function stop() {
-    window.clearTimeout(pendingTimer);
-    pendingTimer = 0;
     window.cancelAnimationFrame(frame);
     frame = 0;
-    spinning = false;
+    spinRequested = false;
     velocity = AT_REST;
   }
 
@@ -70,7 +68,7 @@ export function createCameraFollow(map, { onInterrupted }) {
     const center = map.getCenter();
     const zoom = map.getZoom();
     const onGlobe = isGlobe(map);
-    if (spinning) {
+    if (spinRequested && (target === null || arrived)) {
       // 自転中は引いて地球全体を見せる。自転の速度を残しておくと、次の地点へ向かうときに止まらずに曲がっていく。
       const zoomVelocity = onGlobe ? springVelocity(velocity.zoom, overviewZoom(map, center.lat) - zoom, seconds) : 0;
       velocity = { lng: IDLE_SPIN_DEGREES_PER_SECOND, lat: 0, zoom: zoomVelocity };
@@ -91,6 +89,8 @@ export function createCameraFollow(map, { onInterrupted }) {
     };
     if (isSettled(offset, velocity)) {
       velocity = AT_REST;
+      arrived = true;
+      if (spinRequested) frame = window.requestAnimationFrame(step);
       return;
     }
     velocity = {
@@ -110,7 +110,7 @@ export function createCameraFollow(map, { onInterrupted }) {
 
   function aim(nextTarget) {
     target = nextTarget;
-    lastAimAt = performance.now();
+    arrived = false;
     const center = [nextTarget.lng, nextTarget.lat];
     const zoom = isGlobe(map) ? focusZoom(map, nextTarget.lat) : map.getZoom();
     if (reducedMotion.matches) {
@@ -125,33 +125,16 @@ export function createCameraFollow(map, { onInterrupted }) {
   }
 
   return {
-    // idle はリクエストの無い時点を再生しているとき。地点へは向かず、ゆっくり自転させる。
-    setTarget(nextTarget, { idle, respectDwell }) {
+    // 行き先へはすぐ向かう。いつ動き出すか（先読み・滞在時間）は followPlan.js が決める。
+    // idle はリクエストの無い時点を再生しているとき。行き先に着いたら、ゆっくり自転させる。
+    setTarget(nextTarget, { idle }) {
       if (!enabled) return;
-      window.clearTimeout(pendingTimer);
-      pendingTimer = 0;
-
-      spinning = idle && !reducedMotion.matches && isGlobe(map);
-      if (spinning) {
-        run();
+      spinRequested = idle && !reducedMotion.matches && isGlobe(map);
+      if (nextTarget && nextTarget !== target) {
+        aim(nextTarget);
         return;
       }
-      if (!nextTarget) return;
       // 同じ地点のままなら、自転でずれた分だけ戻す。
-      if (nextTarget === target) {
-        run();
-        return;
-      }
-
-      const waitMs = respectDwell ? lastAimAt + MIN_DWELL_MS - performance.now() : 0;
-      if (waitMs <= 0) {
-        aim(nextTarget);
-        return;
-      }
-      pendingTimer = window.setTimeout(() => {
-        pendingTimer = 0;
-        aim(nextTarget);
-      }, waitMs);
       run();
     },
     setEnabled(nextEnabled) {
@@ -163,6 +146,19 @@ export function createCameraFollow(map, { onInterrupted }) {
       for (const type of USER_MOVE_EVENTS) map.off(type, interrupt);
     },
   };
+}
+
+// 今の地点から次の地点の近く（ARRIVED_DEGREES 以内）へ着くまでの時間の見積もり。先読みの計画に使う。
+export function estimateTravelMs(from, to) {
+  const degrees = angularDistanceDegrees(from, to);
+  if (degrees >= FLY_THRESHOLD_DEGREES) return FLY_DURATION_MS;
+  // 静止から臨界減衰のばねで寄せると、残りの角度は d(1 + ωt)e^(-ωt) で減っていく。
+  for (let seconds = 0; seconds < 5; seconds += 0.02) {
+    if (degrees * (1 + SPRING_RATE * seconds) * Math.exp(-SPRING_RATE * seconds) <= ARRIVED_DEGREES) {
+      return seconds * 1000;
+    }
+  }
+  return 5000;
 }
 
 function springVelocity(velocity, offset, seconds) {

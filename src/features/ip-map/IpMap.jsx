@@ -3,6 +3,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { countryName, loadIpv4LocationTable } from "../../../locateIpv4.js";
 import { formatCount, formatMinuteRange } from "../../lib/format.js";
 import { drawIpMap } from "./drawIpMap.js";
+import { planFollowTargets } from "./followPlan.js";
 import { trackHotspots } from "./hotspot.js";
 import styles from "./IpMap.module.css";
 import { plotIpSummaries } from "./plotIpSummaries.js";
@@ -61,6 +62,13 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
   }, [plottedWindows]);
   const hotspot = hotspots[safeIndex] ?? null;
 
+  // 再生中は、円が出るより先にカメラを動かす。止めているときは、表示している時点の注目地点へ向ける。
+  const followTargets = useMemo(() => {
+    const stepMsByWindow = summariesByWindow.map((summaries) => playbackStepMs(summaries.length === 0));
+    return planFollowTargets(hotspots, stepMsByWindow);
+  }, [hotspots, summariesByWindow]);
+  const followTarget = isPlaying ? (followTargets[safeIndex] ?? null) : hotspot;
+
   useEffect(() => {
     let cancelled = false;
     setLocationError("");
@@ -92,7 +100,7 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
       return undefined;
     }
 
-    const stepMs = activeSummaries.length === 0 ? EMPTY_WINDOW_STEP_MS : PLAYBACK_STEP_MS;
+    const stepMs = playbackStepMs(activeSummaries.length === 0);
     const timer = window.setTimeout(() => {
       setWindowIndex((current) => current + 1);
     }, stepMs);
@@ -128,12 +136,8 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
     if (!handle) return;
     handle.setFollowEnabled(followEnabled);
     if (!followEnabled) return;
-    // 再生中は同じ地点に留まる時間を守る。スクラブで選んだ時点には、すぐ向ける。
-    handle.followHotspot(hotspot, {
-      idle: isPlaying && isEmptyWindow,
-      respectDwell: isPlaying,
-    });
-  }, [followEnabled, hotspot, isPlaying, isEmptyWindow]);
+    handle.followHotspot(followTarget, { idle: isPlaying && isEmptyWindow });
+  }, [followEnabled, followTarget, isPlaying, isEmptyWindow]);
 
   const mapStatus =
     locationError !== ""
@@ -142,7 +146,8 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
         ? "位置情報を読み込んでいます…"
         : [
             describeWindow(activeSummaries.length, plottedWindow.unlocated.length, timeWindows.length, earliestTimestampMs),
-            describeHotspot(hotspot, isEmptyWindow),
+            // 再生中の追従は一瞬だけの地点へは向かわないので、表示もカメラの行き先に合わせる。
+            describeHotspot(followEnabled && isPlaying ? followTarget : hotspot, isEmptyWindow),
           ]
             .filter((sentence) => sentence !== "")
             .join("");
@@ -284,6 +289,10 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
       </p>
     </section>
   );
+}
+
+function playbackStepMs(isEmptyWindow) {
+  return isEmptyWindow ? EMPTY_WINDOW_STEP_MS : PLAYBACK_STEP_MS;
 }
 
 function playbackLabel(timeWindow, index, windowCount, earliestTimestampMs) {

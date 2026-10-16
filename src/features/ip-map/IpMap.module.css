@@ -19,10 +19,39 @@
   line-height: 1.7;
 }
 
+.legendRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+}
+
 .legend {
   display: flex;
   gap: 16px;
-  margin-top: 14px;
+}
+
+.viewToggle {
+  display: flex;
+  gap: 8px;
+}
+
+.viewToggle button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.viewToggle button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 700;
 }
 
 .playback {

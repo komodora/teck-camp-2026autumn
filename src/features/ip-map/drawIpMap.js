@@ -1,4 +1,4 @@
-import { LngLatBounds, Map as MapLibreMap, Marker, NavigationControl, Popup } from "maplibre-gl";
+import { Map as MapLibreMap, Marker, NavigationControl, Popup } from "maplibre-gl";
 import { countryName } from "../../../locateIpv4.js";
 import { formatCount } from "../../lib/format.js";
 import styles from "./IpMap.module.css";
@@ -12,7 +12,7 @@ const SKY_COLOR = "#d6e4ee";
 
 const openStreetMapGlobeStyle = {
   version: 8,
-  // MapLibre 6 では投影を style で指定する。globe は広域では球体、拡大するとメルカトルへ寄る。
+  // MapLibre 6 では投影を style で指定する。初期表示は地球儀で、画面から平面地図へ切り替えられる。
   projection: { type: "globe" },
   sky: {
     "sky-color": SKY_COLOR,
@@ -68,11 +68,20 @@ export function drawIpMap(container) {
   let pendingFit = [];
   let mapLoaded = false;
   let hasFitted = false;
+  let pendingProjection = "globe";
+  let projectionGeneration = 0;
 
   const placeWhenReady = () => {
     if (!mapLoaded) return;
     placeCircles(map, markers);
   };
+
+  function applyProjection() {
+    if (!mapLoaded) return;
+    map.setProjection({ type: pendingProjection });
+    // 平面地図は世界を1枚に制限すると、日付変更線をまたぐ範囲の中心がアメリカ側へ寄ってしまう。
+    map.setRenderWorldCopies(pendingProjection === "mercator");
+  }
 
   function applyCircles() {
     if (!mapLoaded) return;
@@ -86,7 +95,10 @@ export function drawIpMap(container) {
 
   map.on("load", () => {
     mapLoaded = true;
-    requestAnimationFrame(applyCircles);
+    requestAnimationFrame(() => {
+      applyProjection();
+      applyCircles();
+    });
   });
   // ドラッグで地球儀を回すと画面上の位置が変わるので、ズーム後だけでなく移動後も置く。
   map.on("zoomend", placeWhenReady);
@@ -103,6 +115,18 @@ export function drawIpMap(container) {
       pendingCircles = circles;
       radiusBasisCount = nextRadiusBasisCount;
       applyCircles();
+    },
+    setProjection(projection) {
+      pendingProjection = projection;
+      if (!mapLoaded) return;
+      // 切り替え直後の fitBounds は、まだ地球儀のズームのまま計算されることがある。描画が落ち着いてから寄せ直す。
+      const generation = ++projectionGeneration;
+      map.once("idle", () => {
+        if (generation !== projectionGeneration) return;
+        hasFitted = false;
+        applyCircles();
+      });
+      applyProjection();
     },
     destroy() {
       map.remove();
@@ -135,6 +159,9 @@ function syncCircleMarkers(map, markerByKey, circles, radiusBasisCount) {
   return sorted.map((circle) => markerByKey.get(`${circle.ip}:${circle.statusClass}`));
 }
 
+const FIT_PADDING_PX = 72;
+const WORLD_PIXELS_AT_ZOOM_ZERO = 512;
+
 function fitLngLats(map, lngLats) {
   map.resize();
   if (lngLats.length === 1) {
@@ -143,12 +170,40 @@ function fitLngLats(map, lngLats) {
   }
 
   // 経度をそのまま包むと日付変更線をまたぐ2点がアフリカ側の長い弧になる。近い経度へ寄せて短い方を収める。
+  // fitBounds は地球儀側のズーム計算になり、平面地図へ切り替えるとその範囲からはみ出す。
   const anchorLongitude = lngLats[0][0];
-  const bounds = new LngLatBounds();
+  let west = anchorLongitude;
+  let east = anchorLongitude;
+  let south = lngLats[0][1];
+  let north = lngLats[0][1];
   for (const lngLat of lngLats) {
-    bounds.extend([longitudeNear(lngLat[0], anchorLongitude), lngLat[1]]);
+    const longitude = longitudeNear(lngLat[0], anchorLongitude);
+    west = Math.min(west, longitude);
+    east = Math.max(east, longitude);
+    south = Math.min(south, lngLat[1]);
+    north = Math.max(north, lngLat[1]);
   }
-  map.fitBounds(bounds, { padding: 56, animate: false, maxZoom: 4 });
+
+  const width = Math.max(map.getContainer().clientWidth - FIT_PADDING_PX * 2, 1);
+  const height = Math.max(map.getContainer().clientHeight - FIT_PADDING_PX * 2, 1);
+  const longitudeFraction = Math.max((east - west) / 360, 1 / 360);
+  const latitudeFraction = Math.max(mercatorY(south) - mercatorY(north), 1 / 360);
+  const zoomX = Math.log2(width / (WORLD_PIXELS_AT_ZOOM_ZERO * longitudeFraction));
+  const zoomY = Math.log2(height / (WORLD_PIXELS_AT_ZOOM_ZERO * latitudeFraction));
+  map.jumpTo({
+    center: [wrapLongitude((west + east) / 2), (south + north) / 2],
+    zoom: Math.min(4, zoomX, zoomY),
+  });
+}
+
+function mercatorY(latitude) {
+  const clamped = Math.max(-85, Math.min(85, latitude));
+  const sine = Math.sin((clamped * Math.PI) / 180);
+  return 0.5 - Math.log((1 + sine) / (1 - sine)) / (4 * Math.PI);
+}
+
+function wrapLongitude(longitude) {
+  return ((((longitude + 180) % 360) + 360) % 360) - 180;
 }
 
 function longitudeNear(longitude, anchorLongitude) {
@@ -199,7 +254,7 @@ function placeCircles(map, markers) {
 
   const placed = [];
   for (const item of markers) {
-    if (!isOnVisibleGlobe(map, item.origin)) {
+    if (!isOnVisibleSurface(map, item.origin)) {
       item.marker.setLngLat(item.origin);
       setCircleVisible(map, item);
       continue;
@@ -222,17 +277,17 @@ function placeCircles(map, markers) {
 }
 
 function setCircleVisible(map, item) {
-  const visible = isOnVisibleGlobe(map, item.marker.getLngLat());
+  const visible = isOnVisibleSurface(map, item.marker.getLngLat());
   item.marker.getElement().style.visibility = visible ? "visible" : "hidden";
   const popup = item.marker.getPopup();
   if (!visible && popup?.isOpen()) popup.remove();
 }
 
-function isOnVisibleGlobe(map, lngLat) {
+function isOnVisibleSurface(map, lngLat) {
   const screenPoint = map.project(lngLat);
   const surface = map.unproject(screenPoint);
   const [longitude, latitude] = lngLatPair(lngLat);
-  // 裏側の点は手前の地表に投影される。往復して元の座標へ戻る点だけ球体の表にいる。
+  // 地球儀の裏側は手前の地表に投影される。往復して元の座標へ戻る点だけ見えている。平面地図ではこの往復が成り立つ。
   return shortestLongitudeDelta(longitude, surface.lng) < 1 && Math.abs(latitude - surface.lat) < 1;
 }
 

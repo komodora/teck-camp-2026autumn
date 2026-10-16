@@ -13,6 +13,8 @@ const PLAYBACK_STEP_MS = 800;
 // リクエストの無い区間を同じ速度で送ると、空白の地球儀が長く続く。
 const EMPTY_WINDOW_STEP_MS = 250;
 const DEFAULT_SPAN_MINUTES = 5;
+const GLOBE_PROJECTION = "globe";
+const FLAT_PROJECTION = "mercator";
 
 export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTimestampMs }) {
   const [locationError, setLocationError] = useState("");
@@ -20,6 +22,7 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
   const [spanMinutes, setSpanMinutes] = useState(DEFAULT_SPAN_MINUTES);
   const [windowIndex, setWindowIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [projection, setProjection] = useState(GLOBE_PROJECTION);
   const mapElementRef = useRef(null);
   const mapHandleRef = useRef(null);
 
@@ -94,9 +97,12 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
   }, []);
 
   useEffect(() => {
-    if (!mapHandleRef.current || locatedOverview === null) return;
-    mapHandleRef.current.fitLocations(locatedOverview.circles);
-  }, [locatedOverview]);
+    const handle = mapHandleRef.current;
+    if (!handle) return;
+    handle.setProjection(projection);
+    // 地球儀と平面地図では同じズームでも見える範囲が違う。切り替えたらIPが収まる位置へ戻す。
+    if (locatedOverview) handle.fitLocations(locatedOverview.circles);
+  }, [projection, locatedOverview]);
 
   useEffect(() => {
     if (!mapHandleRef.current || plottedWindow === null) return;
@@ -150,17 +156,43 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
     showWindowAt(Number(event.target.value));
   }
 
+  function showGlobe() {
+    setProjection(GLOBE_PROJECTION);
+  }
+
+  function showFlatMap() {
+    setProjection(FLAT_PROJECTION);
+  }
+
+  function handleGlobeClick() {
+    showGlobe();
+  }
+
+  function handleFlatMapClick() {
+    showFlatMap();
+  }
+
   return (
     <section className={styles.panel} aria-labelledby="map-heading">
       <div className={styles.copy}>
         <h2 id="map-heading">IPの分布</h2>
         <p>
-          200系と400系を返したクライアントIPを推定位置に置いています。時間の幅で区切った件数を、再生しながら表示します。件数が多いほど円が大きく、400系は赤、200系は緑の縁です。ドラッグで地球儀を回せます。拡大すると、同じ位置のIPを少しずらして表示します。
+          200系と400系を返したクライアントIPを推定位置に置いています。時間の幅で区切った件数を、再生しながら表示します。件数が多いほど円が大きく、400系は赤、200系は緑の縁です。地球儀はドラッグで回せます。拡大すると、同じ位置のIPを少しずらして表示します。
         </p>
       </div>
-      <div className={styles.legend}>
-        <span className={`${styles.legendItem} ${styles.clientError}`}>400系</span>
-        <span className={`${styles.legendItem} ${styles.success}`}>200系</span>
+      <div className={styles.legendRow}>
+        <div className={styles.legend}>
+          <span className={`${styles.legendItem} ${styles.clientError}`}>400系</span>
+          <span className={`${styles.legendItem} ${styles.success}`}>200系</span>
+        </div>
+        <div className={styles.viewToggle} role="group" aria-label="地図の表示">
+          <button type="button" aria-pressed={projection === GLOBE_PROJECTION} onClick={handleGlobeClick}>
+            地球儀
+          </button>
+          <button type="button" aria-pressed={projection === FLAT_PROJECTION} onClick={handleFlatMapClick}>
+            平面地図
+          </button>
+        </div>
       </div>
       <div className={styles.playback}>
         <label className={styles.spanField}>
@@ -194,7 +226,11 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
         </p>
       </div>
       <p className={styles.status}>{mapStatus}</p>
-      <div ref={mapElementRef} className={styles.map} aria-label="クライアントIPの分布地球儀" />
+      <div
+        ref={mapElementRef}
+        className={styles.map}
+        aria-label={projection === GLOBE_PROJECTION ? "クライアントIPの分布地球儀" : "クライアントIPの分布地図"}
+      />
       <ul className={styles.unlocated}>
         {preview.map((summary) => (
           <li key={summary.ip}>{unlocatedLabel(summary)}</li>

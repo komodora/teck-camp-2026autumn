@@ -1,12 +1,16 @@
 import { HttpError } from "../httpError.js";
+import { createAlbQueryApiStore } from "../externalQuery/albQueryApiStore.js";
 import { createNdjsonStore, defaultUploadDirectory } from "../ingest/ndjsonStore.js";
 import { sendJson } from "../sendJson.js";
 import { handleChatRequest } from "./router.js";
 
-export function createChatMiddleware({ store = createNdjsonStore(defaultUploadDirectory) } = {}) {
+export function createChatMiddleware({
+  storedStore = createNdjsonStore(defaultUploadDirectory),
+  externalStore = createAlbQueryApiStore(),
+} = {}) {
   return async function chatMiddleware(request, response, next) {
     try {
-      const handled = await handleChatRequest(request, response, { store });
+      const handled = await handleChatRequest(request, response, { storedStore, externalStore });
       if (!handled) next();
     } catch (error) {
       if (response.headersSent) {

@@ -1,5 +1,5 @@
-export async function searchAccessLogs(store) {
-  const records = await store.loadAll();
+export async function searchAccessLogs(store, options) {
+  const records = await store.loadAll(options);
   return records.sort(byRequestTime);
 }
 

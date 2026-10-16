@@ -21,6 +21,8 @@ Lint・テストの仕組みはない。
 
 チャット機能(`/report` 内)を使うには、`ANTHROPIC_API_KEY` を `.env` に設定しておく必要がある(未設定でもアップロード・集計・地図機能は動く)。APIキーがワークスペースに紐付いていない場合は `ANTHROPIC_WORKSPACE_ID` も設定する(`anthropic-workspace-id` ヘッダーとして送られる)。
 
+`/report` の「取得元」を「外部API(BigQuery)」に切り替える場合は、`ALB_QUERY_API_KEY` を `.env` に設定しておく必要がある(`server/externalQuery/albQueryApiStore.js` が `X-API-Key` ヘッダーとして送る)。
+
 ### 位置情報データの準備(初回のみ)
 
 `data/ipv4-city.bin.gz` はリポジトリに含まれないため、`npm run dev` の前に作る必要がある。
@@ -42,7 +44,7 @@ ALBアクセスログをアップロードし、400系(クライアントエラ�
 1. **アップロード**: `src/features/log-upload` がファイルを `POST /upload-logs`(`server/upload/`)へ送る。
 2. **構造化**: `server/ingest/structureAlbAccessLog.js` がALBアクセスログの生テキストを1行ずつ固定インデックスでフィールド分解し、`{request_time_utc, client_ip_port, alb_status_code, http_request, ...}` という素朴なJSONレコードに変換する(`server/ingest/pipeline.js`経由)。
 3. **保存**: `server/ingest/ndjsonStore.js` がアップロード単位で `data/uploads/<uploadId>.ndjson` に1行1レコードで書き出す。DBは使わず、ファイルがそのまま永続化層になっている(`data/uploads` はgitignore対象)。
-4. **検索**: `GET /access-logs`(`server/search/`)が `data/uploads/*.ndjson` を全件読み込んで返す。絞り込みは行わない(フィルタはすべてクライアント側)。
+4. **検索**: `GET /access-logs`(`server/search/`)が `data/uploads/*.ndjson` を全件読み込んで返す。絞り込みは行わない(フィルタはすべてクライアント側)。クエリパラメータ `source=external` を付けると、代わりに `server/externalQuery/albQueryApiStore.js` が外部のBigQueryクエリAPI(`alb-query-api`)から同じ形のレコードをページング取得して返す。外部APIのときだけ `date=YYYY-MM-DD` でSQLの `WHERE DATE(request_time_utc) = ...`(UTC基準)による絞り込みも指定できる。画面側は `src/lib/dataSource.js`(localStorageに保存)で取得元・日付を選び、`/report` の「取得元」セレクトと日付入力で切り替える。`POST /chat` も同じ仕組みでボディの `source`/`date` を見て切り替える。
 5. **集計**: ルート直下の `analyzeAlbAccessLog.js` が、取得した全レコードから集計を行う。
    - `analyzeAccessLogRecords(records)`: 画面全体向け。パス別ランキング、IPごとの2xx/4xx件数(`ipSummaries`)、IPごとの個別リクエスト(`ipRequests`)などを1回のループで算出する。
    - `buildIpDetail(records, ip)`: IP詳細ページ向け。指定IPの400系のみを対象に、パス別ランキング・時刻帯用の生タイムスタンプ配列・期間を算出する。

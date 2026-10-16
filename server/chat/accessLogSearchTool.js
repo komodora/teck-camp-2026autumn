@@ -20,9 +20,9 @@ export const ACCESS_LOG_SEARCH_TOOL = {
   },
 };
 
-export function createAccessLogSearch(store) {
+export function createAccessLogSearch(store, loadOptions) {
   return async function searchAccessLogs({ ip, pathContains, statusCode, limit } = {}) {
-    const records = await store.loadAll();
+    const records = await store.loadAll(loadOptions);
     const normalizedPathContains = typeof pathContains === "string" ? pathContains.toLowerCase() : null;
 
     const matched = records.filter((record) => {

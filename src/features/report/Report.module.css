@@ -1,5 +1,26 @@
 .fetch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
   margin-top: 28px;
+}
+
+.dataSourceField {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.dataSourceField select,
+.dataSourceField input {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
 }
 
 .fetchButton {
@@ -20,7 +41,8 @@
 }
 
 .fetchError {
-  margin: 12px 0 0;
+  flex-basis: 100%;
+  margin: 0;
   color: var(--accent);
   line-height: 1.6;
 }

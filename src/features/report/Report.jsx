@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { analyzeAccessLogRecords } from "../../../analyzeAlbAccessLog.js";
+import { DATA_SOURCES, getDataSource, getExternalDate, setDataSource, setExternalDate } from "../../lib/dataSource.js";
 import { Chat } from "../chat";
 import { IpList } from "../ip-list";
 import { IpMap } from "../ip-map";
@@ -9,6 +10,8 @@ import styles from "./Report.module.css";
 import { searchStoredAccessLogs } from "./searchStoredAccessLogs.js";
 
 export function Report() {
+  const [dataSource, setDataSourceState] = useState(getDataSource());
+  const [externalDate, setExternalDateState] = useState(getExternalDate());
   const [analysis, setAnalysis] = useState(null);
   const [fetchError, setFetchError] = useState("");
   const [isFetching, setIsFetching] = useState(false);
@@ -37,12 +40,42 @@ export function Report() {
     showStoredAccessLogs();
   }
 
+  function handleDataSourceChange(event) {
+    const value = event.target.value;
+    setDataSource(value);
+    setDataSourceState(value);
+    setAnalysis(null);
+  }
+
+  function handleExternalDateChange(event) {
+    const value = event.target.value;
+    setExternalDate(value);
+    setExternalDateState(value);
+    setAnalysis(null);
+  }
+
   return (
     <>
       <section className={styles.fetch} aria-labelledby="fetch-heading">
         <h2 id="fetch-heading" className="visually-hidden">
           保存済みログの取得
         </h2>
+        <label className={styles.dataSourceField}>
+          取得元
+          <select value={dataSource} onChange={handleDataSourceChange}>
+            {DATA_SOURCES.map((source) => (
+              <option key={source.value} value={source.value}>
+                {source.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {dataSource === "external" && (
+          <label className={styles.dataSourceField}>
+            日付(UTC、未指定で全期間)
+            <input type="date" value={externalDate} onChange={handleExternalDateChange} />
+          </label>
+        )}
         <button type="button" className={styles.fetchButton} onClick={handleFetchClick} disabled={isFetching}>
           {isFetching ? "取得しています" : "データを取得"}
         </button>

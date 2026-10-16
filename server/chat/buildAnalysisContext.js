@@ -26,8 +26,8 @@ function loadLocationTableOnce() {
   return locationTable;
 }
 
-export async function buildAnalysisContext(store) {
-  const records = await store.loadAll();
+export async function buildAnalysisContext(store, loadOptions) {
+  const records = await store.loadAll(loadOptions);
   const analysis = analyzeAccessLogRecords(records);
   const table = loadLocationTableOnce();
 

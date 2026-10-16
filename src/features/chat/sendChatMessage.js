@@ -1,10 +1,13 @@
+import { getDataSource, getExternalDate } from "../../lib/dataSource.js";
 import { chatPath } from "./chatPath.js";
 
 export async function sendChatMessage({ message, history }) {
+  const source = getDataSource();
+  const date = source === "external" ? getExternalDate() : "";
   const response = await fetch(chatPath, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ message, history }),
+    body: JSON.stringify({ message, history, source, date }),
   });
   const payload = await readChatResponse(response);
   if (!response.ok) {

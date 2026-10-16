@@ -1,5 +1,25 @@
+.openButton {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1000;
+  padding: 14px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fffdf9;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
 .chat {
-  margin-top: 28px;
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1000;
+  width: 600px;
   padding: 20px;
   background: var(--card);
   border: 1px solid var(--line);
@@ -7,9 +27,34 @@
   box-shadow: var(--shadow);
 }
 
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
 .heading {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 1rem;
+}
+
+.closeButton {
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.closeButton:hover {
+  background: var(--bg);
 }
 
 .messages {

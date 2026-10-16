@@ -3,6 +3,7 @@ import styles from "./Chat.module.css";
 import { sendChatMessage } from "./sendChatMessage.js";
 
 export function Chat() {
+  const [isOpen, setIsOpen] = useState(false);
   const [history, setHistory] = useState([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -29,11 +30,34 @@ export function Chat() {
     }
   }
 
+  if (!isOpen) {
+    return (
+      <button
+        type="button"
+        className={styles.openButton}
+        onClick={() => setIsOpen(true)}
+        aria-label="AI に質問する"
+      >
+        AI に質問する
+      </button>
+    );
+  }
+
   return (
     <section className={styles.chat} aria-labelledby="chat-heading">
-      <h2 id="chat-heading" className={styles.heading}>
-        AI に質問する
-      </h2>
+      <div className={styles.header}>
+        <h2 id="chat-heading" className={styles.heading}>
+          AI に質問する
+        </h2>
+        <button
+          type="button"
+          className={styles.closeButton}
+          onClick={() => setIsOpen(false)}
+          aria-label="チャットを閉じる"
+        >
+          ×
+        </button>
+      </div>
       <div className={styles.messages}>
         {history.map((entry, index) => (
           <p key={index} className={entry.role === "user" ? styles.userMessage : styles.assistantMessage}>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { analyzeAccessLogRecords } from "../../../analyzeAlbAccessLog.js";
+import { Chat } from "../chat";
 import { IpList } from "../ip-list";
 import { IpMap } from "../ip-map";
 import { Ranking } from "../ranking";
@@ -62,6 +63,7 @@ export function Report() {
           />
           <IpList analysis={analysis} />
           <Ranking analysis={analysis} />
+          <Chat />
         </section>
       )}
     </>

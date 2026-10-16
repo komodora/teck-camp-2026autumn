@@ -24,6 +24,6 @@ python3 scripts/build-ipv4-locations.py \
 ## 起動
 
 ```bash
-npm install
-npm run dev
+bun install
+bun run dev
 ```

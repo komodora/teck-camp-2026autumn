@@ -1,6 +1,7 @@
 import { Map as MapLibreMap, Marker, NavigationControl, Popup } from "maplibre-gl";
 import { countryName } from "../../../locateIpv4.js";
 import { formatCount } from "../../lib/format.js";
+import { createCameraFollow } from "./cameraFollow.js";
 import styles from "./IpMap.module.css";
 
 const MIN_CIRCLE_RADIUS = 7;
@@ -61,6 +62,9 @@ export function drawIpMap(container) {
   });
   map.addControl(new NavigationControl({ visualizePitch: false }), "top-right");
 
+  let notifyFollowInterrupted = () => {};
+  const follow = createCameraFollow(map, { onInterrupted: () => notifyFollowInterrupted() });
+
   const markerByKey = new Map();
   let markers = [];
   let pendingCircles = [];
@@ -116,6 +120,16 @@ export function drawIpMap(container) {
       radiusBasisCount = nextRadiusBasisCount;
       applyCircles();
     },
+    followHotspot(hotspot, options) {
+      if (!mapLoaded) return;
+      follow.setTarget(hotspot, options);
+    },
+    setFollowEnabled(enabled) {
+      follow.setEnabled(enabled);
+    },
+    onFollowInterrupted(callback) {
+      notifyFollowInterrupted = callback;
+    },
     setProjection(projection) {
       pendingProjection = projection;
       if (!mapLoaded) return;
@@ -129,6 +143,7 @@ export function drawIpMap(container) {
       applyProjection();
     },
     destroy() {
+      follow.destroy();
       map.remove();
     },
   };
@@ -217,7 +232,8 @@ function createCircleMarker(map, circle, radius) {
   element.className = styles.circle;
   paintCircleElement(element, circle, radius);
 
-  const marker = new Marker({ element, anchor: "center" })
+  // 地球儀の裏側は MapLibre が毎フレーム opacityWhenCovered を当てる。自動回転の途中でも透けないよう 0 にする。
+  const marker = new Marker({ element, anchor: "center", opacityWhenCovered: 0 })
     .setLngLat(circleLngLat(circle))
     .setPopup(
       new Popup({ className: "ip-popup-wrap", offset: radius, maxWidth: "260px" }).setHTML(popupHtml(circle)),
@@ -247,7 +263,7 @@ function placeCircles(map, markers) {
   if (map.getZoom() < OVERLAP_SEPARATION_MIN_ZOOM) {
     for (const item of markers) {
       item.marker.setLngLat(item.origin);
-      setCircleVisible(map, item);
+      closeHiddenPopup(map, item);
     }
     return;
   }
@@ -256,7 +272,7 @@ function placeCircles(map, markers) {
   for (const item of markers) {
     if (!isOnVisibleSurface(map, item.origin)) {
       item.marker.setLngLat(item.origin);
-      setCircleVisible(map, item);
+      closeHiddenPopup(map, item);
       continue;
     }
 
@@ -272,15 +288,14 @@ function placeCircles(map, markers) {
     }
     placed.push({ point, radius: item.radius });
     item.marker.setLngLat(map.unproject([point.x, point.y]));
-    setCircleVisible(map, item);
+    closeHiddenPopup(map, item);
   }
 }
 
-function setCircleVisible(map, item) {
-  const visible = isOnVisibleSurface(map, item.marker.getLngLat());
-  item.marker.getElement().style.visibility = visible ? "visible" : "hidden";
+// 円の表示・非表示は Marker の opacityWhenCovered に任せる。裏側へ回った円の吹き出しだけ閉じる。
+function closeHiddenPopup(map, item) {
   const popup = item.marker.getPopup();
-  if (!visible && popup?.isOpen()) popup.remove();
+  if (popup?.isOpen() && !isOnVisibleSurface(map, item.marker.getLngLat())) popup.remove();
 }
 
 function isOnVisibleSurface(map, lngLat) {

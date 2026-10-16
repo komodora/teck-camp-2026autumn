@@ -33,6 +33,12 @@
   gap: 16px;
 }
 
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
 .viewToggle {
   display: flex;
   gap: 8px;
@@ -159,6 +165,11 @@
   transition:
     width 400ms ease,
     height 400ms ease;
+}
+
+/* 地球儀の裏側に回った円は見えないので、手前の地表のクリックを横取りしない。 */
+.circle:global(.maplibregl-marker-covered) {
+  pointer-events: none;
 }
 
 .unlocated {

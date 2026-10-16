@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { loadIpv4LocationTable } from "../../../locateIpv4.js";
+import { countryName, loadIpv4LocationTable } from "../../../locateIpv4.js";
 import { formatCount, formatMinuteRange } from "../../lib/format.js";
 import { drawIpMap } from "./drawIpMap.js";
+import { trackHotspots } from "./hotspot.js";
 import styles from "./IpMap.module.css";
 import { plotIpSummaries } from "./plotIpSummaries.js";
 import "./popup.css";
@@ -15,6 +16,7 @@ const EMPTY_WINDOW_STEP_MS = 250;
 const DEFAULT_SPAN_MINUTES = 5;
 const GLOBE_PROJECTION = "globe";
 const FLAT_PROJECTION = "mercator";
+const EMPTY_PLOT = { circles: [], unlocated: [] };
 
 export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTimestampMs }) {
   const [locationError, setLocationError] = useState("");
@@ -23,6 +25,7 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
   const [windowIndex, setWindowIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [projection, setProjection] = useState(GLOBE_PROJECTION);
+  const [followEnabled, setFollowEnabled] = useState(true);
   const mapElementRef = useRef(null);
   const mapHandleRef = useRef(null);
 
@@ -44,10 +47,18 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
     return plotIpSummaries(ipSummaries, locationTable);
   }, [ipSummaries, locationTable]);
 
-  const plottedWindow = useMemo(() => {
+  // 注目地点は直前の区間にも左右されるので、区間ごとの円をまとめて置いておく。
+  const plottedWindows = useMemo(() => {
     if (!locationTable) return null;
-    return plotIpSummaries(activeSummaries, locationTable);
-  }, [activeSummaries, locationTable]);
+    return summariesByWindow.map((summaries) => plotIpSummaries(summaries, locationTable));
+  }, [summariesByWindow, locationTable]);
+  const plottedWindow = plottedWindows === null ? null : (plottedWindows[safeIndex] ?? EMPTY_PLOT);
+
+  const hotspots = useMemo(() => {
+    if (plottedWindows === null) return [];
+    return trackHotspots(plottedWindows.map((plotted) => plotted.circles));
+  }, [plottedWindows]);
+  const hotspot = hotspots[safeIndex] ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +100,7 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
 
   useEffect(() => {
     const handle = drawIpMap(mapElementRef.current);
+    handle.onFollowInterrupted(() => setFollowEnabled(false));
     mapHandleRef.current = handle;
     return () => {
       handle.destroy();
@@ -109,12 +121,31 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
     mapHandleRef.current.setCircles(plottedWindow.circles, radiusBasisCount);
   }, [plottedWindow, radiusBasisCount]);
 
+  const isEmptyWindow = activeSummaries.length === 0;
+  useEffect(() => {
+    const handle = mapHandleRef.current;
+    if (!handle) return;
+    handle.setFollowEnabled(followEnabled);
+    if (!followEnabled) return;
+    // 再生中は同じ地点に留まる時間を守る。スクラブで選んだ区間には、すぐ向ける。
+    handle.followHotspot(hotspot, {
+      idle: isPlaying && isEmptyWindow,
+      durationMs: PLAYBACK_STEP_MS,
+      respectDwell: isPlaying,
+    });
+  }, [followEnabled, hotspot, isPlaying, isEmptyWindow]);
+
   const mapStatus =
     locationError !== ""
       ? locationError
       : locationTable === null || plottedWindow === null
         ? "位置情報を読み込んでいます…"
-        : describeWindow(activeSummaries.length, plottedWindow.unlocated.length, timeWindows.length, earliestTimestampMs);
+        : [
+            describeWindow(activeSummaries.length, plottedWindow.unlocated.length, timeWindows.length, earliestTimestampMs),
+            describeHotspot(hotspot, isEmptyWindow),
+          ]
+            .filter((sentence) => sentence !== "")
+            .join("");
 
   const unlocated = plottedWindow?.unlocated ?? [];
   const preview = unlocated.slice(0, UNLOCATED_PREVIEW_LIMIT);
@@ -172,12 +203,16 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
     showFlatMap();
   }
 
+  function handleFollowClick() {
+    setFollowEnabled((current) => !current);
+  }
+
   return (
     <section className={styles.panel} aria-labelledby="map-heading">
       <div className={styles.copy}>
         <h2 id="map-heading">IPの分布</h2>
         <p>
-          200系と400系を返したクライアントIPを推定位置に置いています。時間の幅で区切った件数を、再生しながら表示します。件数が多いほど円が大きく、400系は赤、200系は緑の縁です。地球儀はドラッグで回せます。拡大すると、同じ位置のIPを少しずらして表示します。
+          200系と400系を返したクライアントIPを推定位置に置いています。時間の幅で区切った件数を、再生しながら表示します。件数が多いほど円が大きく、400系は赤、200系は緑の縁です。自動追従を入れると、件数の多い地点（400系を重く数えます）へ地球儀が向きます。ドラッグで回すと追従は止まります。拡大すると、同じ位置のIPを少しずらして表示します。
         </p>
       </div>
       <div className={styles.legendRow}>
@@ -185,13 +220,20 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
           <span className={`${styles.legendItem} ${styles.clientError}`}>400系</span>
           <span className={`${styles.legendItem} ${styles.success}`}>200系</span>
         </div>
-        <div className={styles.viewToggle} role="group" aria-label="地図の表示">
-          <button type="button" aria-pressed={projection === GLOBE_PROJECTION} onClick={handleGlobeClick}>
-            地球儀
-          </button>
-          <button type="button" aria-pressed={projection === FLAT_PROJECTION} onClick={handleFlatMapClick}>
-            平面地図
-          </button>
+        <div className={styles.controls}>
+          <div className={styles.viewToggle} role="group" aria-label="地図の表示">
+            <button type="button" aria-pressed={projection === GLOBE_PROJECTION} onClick={handleGlobeClick}>
+              地球儀
+            </button>
+            <button type="button" aria-pressed={projection === FLAT_PROJECTION} onClick={handleFlatMapClick}>
+              平面地図
+            </button>
+          </div>
+          <div className={styles.viewToggle}>
+            <button type="button" aria-pressed={followEnabled} onClick={handleFollowClick}>
+              自動追従
+            </button>
+          </div>
         </div>
       </div>
       <div className={styles.playback}>
@@ -257,6 +299,13 @@ function describeWindow(ipCount, unlocatedCount, windowCount, earliestTimestampM
   const plottedCount = ipCount - unlocatedCount;
   if (unlocatedCount === 0) return `${formatCount(plottedCount)}件のIPを表示しています。`;
   return `${formatCount(plottedCount)}件のIPを表示しています。位置が分からないIPが${formatCount(unlocatedCount)}件あります。`;
+}
+
+function describeHotspot(hotspot, isEmptyWindow) {
+  if (!hotspot || isEmptyWindow) return "";
+  const country = countryName(hotspot.countryCode);
+  if (country === "") return "";
+  return `注目している地点は${country}付近です。`;
 }
 
 function unlocatedLabel(summary) {

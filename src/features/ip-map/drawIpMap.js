@@ -2,6 +2,7 @@ import { Map as MapLibreMap, Marker, NavigationControl, Popup } from "maplibre-g
 import { countryName } from "../../../locateIpv4.js";
 import { formatCount } from "../../lib/format.js";
 import { createCameraFollow } from "./cameraFollow.js";
+import { overviewZoom } from "./globeZoom.js";
 import styles from "./IpMap.module.css";
 
 const MIN_CIRCLE_RADIUS = 7;
@@ -212,10 +213,11 @@ function fitLngLats(map, lngLats) {
   const latitudeFraction = Math.max(mercatorY(south) - mercatorY(north), 1 / 360);
   const zoomX = Math.log2(width / (WORLD_PIXELS_AT_ZOOM_ZERO * longitudeFraction));
   const zoomY = Math.log2(height / (WORLD_PIXELS_AT_ZOOM_ZERO * latitudeFraction));
-  map.jumpTo({
-    center: [wrapLongitude((west + east) / 2), (south + north) / 2],
-    zoom: Math.min(4, zoomX, zoomY),
-  });
+  const center = [wrapLongitude((west + east) / 2), (south + north) / 2];
+  const fittedZoom = Math.min(4, zoomX, zoomY);
+  // 世界中に散らばると平面地図の計算では地球儀が枠の半分ほどに縮む。地球儀は少なくとも短辺いっぱいに見せる。
+  const zoom = map.getProjection()?.type === "globe" ? Math.max(fittedZoom, overviewZoom(map, center[1])) : fittedZoom;
+  map.jumpTo({ center, zoom });
 }
 
 function mercatorY(latitude) {

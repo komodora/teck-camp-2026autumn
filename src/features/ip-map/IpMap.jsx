@@ -131,7 +131,6 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
     // 再生中は同じ地点に留まる時間を守る。スクラブで選んだ時点には、すぐ向ける。
     handle.followHotspot(hotspot, {
       idle: isPlaying && isEmptyWindow,
-      durationMs: PLAYBACK_STEP_MS,
       respectDwell: isPlaying,
     });
   }, [followEnabled, hotspot, isPlaying, isEmptyWindow]);

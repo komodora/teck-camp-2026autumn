@@ -320,9 +320,10 @@ function circleLngLat(circle) {
   return [circle.longitude, circle.latitude];
 }
 
+// 1つのIPが全体の大半を占めると、面積比例では他の円がすべて最小になる。対数で差を残す。
 function circleRadius(count, largestCount) {
   if (largestCount <= 1) return MIN_CIRCLE_RADIUS;
-  const scale = Math.sqrt(count / largestCount);
+  const scale = Math.log1p(count) / Math.log1p(largestCount);
   return MIN_CIRCLE_RADIUS + (MAX_CIRCLE_RADIUS - MIN_CIRCLE_RADIUS) * scale;
 }
 

@@ -19,7 +19,7 @@ bun run preview   # ビルド結果をプレビュー
 
 Lint・テストの仕組みはない。
 
-チャット機能(`/report` 内)を使うには、`ANTHROPIC_API_KEY` を `.env` に設定しておく必要がある(未設定でもアップロード・集計・地図機能は動く)。
+チャット機能(`/report` 内)を使うには、`ANTHROPIC_API_KEY` を `.env` に設定しておく必要がある(未設定でもアップロード・集計・地図機能は動く)。APIキーがワークスペースに紐付いていない場合は `ANTHROPIC_WORKSPACE_ID` も設定する(`anthropic-workspace-id` ヘッダーとして送られる)。
 
 ### 位置情報データの準備(初回のみ)
 

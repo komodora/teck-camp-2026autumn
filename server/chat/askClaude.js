@@ -6,7 +6,14 @@ const MAX_TOKENS = 2000;
 
 let client;
 function getClient() {
-  if (!client) client = new Anthropic(); // ANTHROPIC_API_KEY を process.env から自動解決
+  if (!client) {
+    const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID;
+    client = new Anthropic({
+      // ANTHROPIC_API_KEY は process.env から自動解決。
+      // ワークスペースに紐付かないAPIキーの場合、どのワークスペースを使うか anthropic-workspace-id ヘッダーで明示する必要がある。
+      defaultHeaders: workspaceId ? { "anthropic-workspace-id": workspaceId } : undefined,
+    });
+  }
   return client;
 }
 
@@ -43,6 +50,8 @@ function buildSystemPrompt(contextForPrompt) {
 }
 
 function toHttpError(error) {
+  console.error(error);
+
   if (error instanceof Anthropic.AuthenticationError) {
     return new HttpError(500, "ANTHROPIC_API_KEY が正しく設定されていません。");
   }
@@ -52,6 +61,5 @@ function toHttpError(error) {
   if (error instanceof Anthropic.APIError) {
     return new HttpError(502, "Claude API の呼び出しに失敗しました。");
   }
-  console.error(error);
   return new HttpError(500, "応答の生成に失敗しました。");
 }

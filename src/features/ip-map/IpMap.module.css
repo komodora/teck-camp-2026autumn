@@ -194,6 +194,13 @@
   }
 }
 
+.ripples {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
 /* 地球儀の裏側に回った円は見えないので、手前の地表のクリックを横取りしない。 */
 .circle:global(.maplibregl-marker-covered) {
   pointer-events: none;

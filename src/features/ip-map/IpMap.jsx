@@ -130,6 +130,12 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
     mapHandleRef.current.setCircles(plottedWindow.circles, radiusBasisCount);
   }, [plottedWindow, radiusBasisCount]);
 
+  // 再生中だけ、時点が進むたびに新しく来た分の波紋を出す。
+  useEffect(() => {
+    if (!mapHandleRef.current || plottedWindow === null || !isPlaying) return;
+    mapHandleRef.current.emitRipples(plottedWindow.circles);
+  }, [plottedWindow, isPlaying]);
+
   const isEmptyWindow = activeSummaries.length === 0;
   useEffect(() => {
     const handle = mapHandleRef.current;

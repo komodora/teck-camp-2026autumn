@@ -3,6 +3,7 @@ import { countryName } from "../../../locateIpv4.js";
 import { formatCount } from "../../lib/format.js";
 import { createCameraFollow } from "./cameraFollow.js";
 import { overviewZoom } from "./globeZoom.js";
+import { createRippleOverlay } from "./rippleOverlay.js";
 import styles from "./IpMap.module.css";
 
 const MIN_CIRCLE_RADIUS = 7;
@@ -67,6 +68,7 @@ export function drawIpMap(container) {
 
   let notifyFollowInterrupted = () => {};
   const follow = createCameraFollow(map, { onInterrupted: () => notifyFollowInterrupted() });
+  const ripples = createRippleOverlay(map, { isVisible: (lngLat) => isOnVisibleSurface(map, lngLat) });
 
   const markerByKey = new Map();
   let markers = [];
@@ -123,6 +125,11 @@ export function drawIpMap(container) {
       radiusBasisCount = nextRadiusBasisCount;
       applyCircles();
     },
+    // この時点で新しく数えた分がある円から波紋を出す。setCircles の後に呼ぶと、ずらして置いた円の位置から広がる。
+    emitRipples(circles) {
+      if (!mapLoaded) return;
+      ripples.emit(circles.flatMap((circle) => rippleFor(circle, markerByKey, radiusBasisCount)));
+    },
     followHotspot(hotspot, options) {
       if (!mapLoaded) return;
       follow.setTarget(hotspot, options);
@@ -147,6 +154,7 @@ export function drawIpMap(container) {
     },
     destroy() {
       follow.destroy();
+      ripples.destroy();
       map.remove();
     },
   };
@@ -233,6 +241,24 @@ function wrapLongitude(longitude) {
 function longitudeNear(longitude, anchorLongitude) {
   const delta = (((longitude - anchorLongitude + 180) % 360) + 360) % 360 - 180;
   return anchorLongitude + delta;
+}
+
+function rippleFor(circle, markerByKey, radiusBasisCount) {
+  const isClientError = circle.statusClass === "4xx";
+  const latestCount = isClientError ? circle.latest4xxCount : circle.latest2xxCount;
+  if (!latestCount) return [];
+  const key = `${circle.ip}:${circle.statusClass}`;
+  const item = markerByKey.get(key);
+  return [
+    {
+      key,
+      lngLat: item ? item.marker.getLngLat() : circleLngLat(circle),
+      color: isClientError ? CLIENT_ERROR_COLOR : SUCCESS_COLOR,
+      baseRadius: circleRadius(circle.count, radiusBasisCount),
+      strength: radiusBasisCount <= 1 ? 1 : Math.min(Math.log1p(latestCount) / Math.log1p(radiusBasisCount), 1),
+      rings: isClientError ? 2 : 1,
+    },
+  ];
 }
 
 function cancelLeaving(item) {

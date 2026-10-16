@@ -3,3 +3,4 @@ node_modules
 dist
 data/ipv4-city.bin.gz
 data/uploads
+logs

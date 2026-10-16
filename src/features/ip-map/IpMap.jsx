@@ -10,9 +10,10 @@ import "./popup.css";
 import { TIME_SPAN_OPTIONS, buildTimeWindows, countIpRequestsByWindow, largestCircleCount } from "./timeWindows.js";
 
 const UNLOCATED_PREVIEW_LIMIT = 12;
-const PLAYBACK_STEP_MS = 800;
-// リクエストの無い区間を同じ速度で送ると、空白の地球儀が長く続く。
-const EMPTY_WINDOW_STEP_MS = 250;
+// 1分ずつずらした時点を送る。1日分（約1,440時点）がおよそ5分で再生し終わる。
+const PLAYBACK_STEP_MS = 200;
+// リクエストの無い時点を同じ速度で送ると、空白の地球儀が長く続く。
+const EMPTY_WINDOW_STEP_MS = 50;
 const DEFAULT_SPAN_MINUTES = 5;
 const GLOBE_PROJECTION = "globe";
 const FLAT_PROJECTION = "mercator";
@@ -47,7 +48,7 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
     return plotIpSummaries(ipSummaries, locationTable);
   }, [ipSummaries, locationTable]);
 
-  // 注目地点は直前の区間にも左右されるので、区間ごとの円をまとめて置いておく。
+  // 注目地点は先頭の時点からの流れで決まるので、時点ごとの円をまとめて置いておく。
   const plottedWindows = useMemo(() => {
     if (!locationTable) return null;
     return summariesByWindow.map((summaries) => plotIpSummaries(summaries, locationTable));
@@ -127,7 +128,7 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
     if (!handle) return;
     handle.setFollowEnabled(followEnabled);
     if (!followEnabled) return;
-    // 再生中は同じ地点に留まる時間を守る。スクラブで選んだ区間には、すぐ向ける。
+    // 再生中は同じ地点に留まる時間を守る。スクラブで選んだ時点には、すぐ向ける。
     handle.followHotspot(hotspot, {
       idle: isPlaying && isEmptyWindow,
       durationMs: PLAYBACK_STEP_MS,
@@ -212,7 +213,7 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
       <div className={styles.copy}>
         <h2 id="map-heading">IPの分布</h2>
         <p>
-          200系と400系を返したクライアントIPを推定位置に置いています。時間の幅で区切った件数を、再生しながら表示します。件数が多いほど円が大きく、400系は赤、200系は緑の縁です。自動追従を入れると、件数の多い地点（400系を重く数えます）へ地球儀が向きます。ドラッグで回すと追従は止まります。拡大すると、同じ位置のIPを少しずらして表示します。
+          200系と400系を返したクライアントIPを推定位置に置いています。各時刻までの直近の件数（集計の幅）を、1分ずつ進めながら再生します。件数が多いほど円が大きく、400系は赤、200系は緑の縁です。自動追従を入れると、件数の多い地点（400系を重く数えます）へ地球儀が向きます。ドラッグで回すと追従は止まります。拡大すると、同じ位置のIPを少しずらして表示します。
         </p>
       </div>
       <div className={styles.legendRow}>
@@ -238,7 +239,7 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
       </div>
       <div className={styles.playback}>
         <label className={styles.spanField}>
-          時間の幅
+          集計の幅
           <select value={spanMinutes} onChange={handleSpanChange}>
             {TIME_SPAN_OPTIONS.map((option) => (
               <option key={option.minutes} value={option.minutes}>

@@ -162,9 +162,26 @@
   border-radius: 50%;
   background: color-mix(in srgb, currentColor 16%, transparent);
   cursor: pointer;
+  /* Marker が opacity と transform を毎フレーム書き換えるので、出入りの演出は filter と scale で付ける。 */
+  animation: circle-enter 300ms ease-out;
   transition:
-    width 400ms ease,
-    height 400ms ease;
+    width 400ms ease-out,
+    height 400ms ease-out,
+    scale 300ms ease-in,
+    filter 300ms ease-in;
+}
+
+.leaving {
+  scale: 0.4;
+  filter: opacity(0);
+  pointer-events: none;
+}
+
+@keyframes circle-enter {
+  from {
+    scale: 0.4;
+    filter: opacity(0);
+  }
 }
 
 /* 地球儀の裏側に回った円は見えないので、手前の地表のクリックを横取りしない。 */

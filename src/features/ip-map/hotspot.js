@@ -6,21 +6,19 @@ const EARTH_RADIUS_KM = 6371;
 const CLIENT_ERROR_WEIGHT = 3;
 const CLUSTER_RADIUS_KM = 1500;
 const CANDIDATE_LIMIT = 20;
-// 直前の区間も減らして数える。1区間だけの単発では向きを変えない。
-const HISTORY_WEIGHTS = [1, 0.5, 0.25];
 // 今の地点の1.5倍を超える塊が別の場所に現れたときだけ乗り換える。
 const SWITCH_RATIO = 1.5;
 const MIN_SHIFT_DEGREES = 8;
 
 const CLUSTER_RADIUS_DEGREES = (CLUSTER_RADIUS_KM / EARTH_RADIUS_KM) * (180 / Math.PI);
 
-// 再生でもスクラブでも同じ区間なら同じ地点になるよう、先頭から順に決めた結果を区間ごとに返す。
-// 円の無い区間は直前の地点を引き継ぐ。
+// 再生でもスクラブでも同じ時点なら同じ地点になるよう、先頭から順に決めた結果を時点ごとに返す。
+// 円の無い時点は直前の地点を引き継ぐ。各時点は直近数分の合計なので、単発のアクセスはそれだけで薄まる。
 export function trackHotspots(circlesByWindow) {
   const hotspots = [];
   let focus = null;
-  for (let index = 0; index < circlesByWindow.length; index += 1) {
-    const points = recentPoints(circlesByWindow, index);
+  for (const circles of circlesByWindow) {
+    const points = circles.map(toPoint);
     if (points.length > 0) focus = nextFocus(focus, points);
     hotspots.push(focus);
   }
@@ -43,20 +41,14 @@ function nextFocus(focus, points) {
   return candidate;
 }
 
-function recentPoints(circlesByWindow, index) {
-  const points = [];
-  HISTORY_WEIGHTS.forEach((historyWeight, offset) => {
-    for (const circle of circlesByWindow[index - offset] ?? []) {
-      const statusWeight = circle.statusClass === "4xx" ? CLIENT_ERROR_WEIGHT : 1;
-      points.push({
-        lng: circle.longitude,
-        lat: circle.latitude,
-        weight: circle.count * statusWeight * historyWeight,
-        countryCode: circle.countryCode,
-      });
-    }
-  });
-  return points;
+function toPoint(circle) {
+  const statusWeight = circle.statusClass === "4xx" ? CLIENT_ERROR_WEIGHT : 1;
+  return {
+    lng: circle.longitude,
+    lat: circle.latitude,
+    weight: circle.count * statusWeight,
+    countryCode: circle.countryCode,
+  };
 }
 
 function densestCluster(points) {

@@ -5,6 +5,8 @@ import { createCameraFollow } from "./cameraFollow.js";
 import styles from "./IpMap.module.css";
 
 const MIN_CIRCLE_RADIUS = 7;
+// 消える円は縮みながら薄れてから外す。IpMap.module.css の .leaving と同じ長さにする。
+const LEAVE_MS = 300;
 const MAX_CIRCLE_RADIUS = 40;
 const CLIENT_ERROR_COLOR = "#c81e1e";
 const SUCCESS_COLOR = "#1f8a3b";
@@ -159,6 +161,8 @@ function syncCircleMarkers(map, markerByKey, circles, radiusBasisCount) {
     const radius = circleRadius(circle.count, radiusBasisCount);
     const existing = markerByKey.get(key);
     if (existing) {
+      // 消えかけの円がまた現れたら、外さずに戻す。
+      cancelLeaving(existing);
       updateCircleMarker(existing, circle, radius);
       continue;
     }
@@ -166,9 +170,12 @@ function syncCircleMarkers(map, markerByKey, circles, radiusBasisCount) {
   }
 
   for (const [key, item] of markerByKey) {
-    if (nextKeys.has(key)) continue;
-    item.marker.remove();
-    markerByKey.delete(key);
+    if (nextKeys.has(key) || item.leavingTimer) continue;
+    item.marker.getElement().classList.add(styles.leaving);
+    item.leavingTimer = window.setTimeout(() => {
+      item.marker.remove();
+      markerByKey.delete(key);
+    }, LEAVE_MS);
   }
 
   return sorted.map((circle) => markerByKey.get(`${circle.ip}:${circle.statusClass}`));
@@ -226,6 +233,13 @@ function longitudeNear(longitude, anchorLongitude) {
   return anchorLongitude + delta;
 }
 
+function cancelLeaving(item) {
+  if (!item.leavingTimer) return;
+  window.clearTimeout(item.leavingTimer);
+  item.leavingTimer = 0;
+  item.marker.getElement().classList.remove(styles.leaving);
+}
+
 function createCircleMarker(map, circle, radius) {
   const element = document.createElement("button");
   element.type = "button";
@@ -240,7 +254,7 @@ function createCircleMarker(map, circle, radius) {
     )
     .addTo(map);
 
-  return { marker, radius, origin: circleLngLat(circle) };
+  return { marker, radius, origin: circleLngLat(circle), leavingTimer: 0 };
 }
 
 function updateCircleMarker(item, circle, radius) {

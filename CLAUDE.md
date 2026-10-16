@@ -11,10 +11,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## コマンド
 
 ```bash
-npm install
-npm run dev       # 開発サーバー起動 (Vite)
-npm run build     # 本番ビルド (dist/)
-npm run preview   # ビルド結果をプレビュー
+bun install
+bun run dev       # 開発サーバー起動 (Vite)
+bun run build     # 本番ビルド (dist/)
+bun run preview   # ビルド結果をプレビュー
 ```
 
 Lint・テストの仕組みはない。

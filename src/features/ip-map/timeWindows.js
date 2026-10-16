@@ -1,35 +1,42 @@
+// steps は集計の幅(minutes)の約1/3の刻みで時点を進めるための候補(常にminutesの約数で、最後はminutes自身)。
+// 刻みが細かすぎると、集計の幅が広いときに再生が遅く感じる。粗すぎると円の出入りがかくつく。
 export const TIME_SPAN_OPTIONS = [
-  { minutes: 5, label: "5分" },
-  { minutes: 15, label: "15分" },
-  { minutes: 30, label: "30分" },
-  { minutes: 60, label: "1時間" },
+  { minutes: 5, label: "5分", steps: [1, 5] },
+  { minutes: 15, label: "15分", steps: [5, 15] },
+  { minutes: 30, label: "30分", steps: [10, 15, 30] },
+  { minutes: 60, label: "1時間", steps: [20, 30, 60] },
 ];
 
 const MINUTE_MS = 60 * 1000;
-// 区間を切り替えるたびに円が出たり消えたりすると再生がかくつく。1分ずつずらし、隣の時点と大半を重ねる。
-// 1分刻みで丸2日分まで。それより長いログは、刻みを広げて時点の数を抑える。
-const STEP_MINUTE_OPTIONS = [1, 5, 15, 60];
 const MAX_WINDOWS = 3000;
 
 // 各時点は「その時刻までの直近 spanMinutes 分」。まだ来ていないリクエストは数えない。
 export function buildTimeWindows(earliestTimestampMs, latestTimestampMs, spanMinutes) {
   if (earliestTimestampMs === null || latestTimestampMs === null) return [];
 
-  for (const stepMinutes of STEP_MINUTE_OPTIONS) {
-    const stepMs = stepMinutes * MINUTE_MS;
-    const spanMs = Math.max(spanMinutes * MINUTE_MS, stepMs);
-    // 分単位の区切りは UTC と JST で同じ位置になる。epoch から切ると、表示上も分ちょうどに揃う。
-    const firstEndMs = alignDown(earliestTimestampMs, stepMs) + stepMs;
-    const lastEndMs = alignDown(latestTimestampMs, stepMs) + stepMs;
-    const windowCount = Math.round((lastEndMs - firstEndMs) / stepMs) + 1;
-    if (!Number.isFinite(windowCount) || windowCount > MAX_WINDOWS) continue;
+  const steps = TIME_SPAN_OPTIONS.find((option) => option.minutes === spanMinutes)?.steps ?? [spanMinutes];
+  // 候補の刻みでも時点が多すぎる(ログが長期間に及ぶ)場合向けの最終手段として60分刻みも試す。
+  const stepMinutesCandidates = steps.includes(60) ? steps : [...steps, 60];
 
-    return Array.from({ length: windowCount }, (_, index) => {
-      const endMs = firstEndMs + index * stepMs;
-      return { startMs: endMs - spanMs, endMs, stepMs };
-    });
+  for (const stepMinutes of stepMinutesCandidates) {
+    const windows = buildTimeWindowsForStep(earliestTimestampMs, latestTimestampMs, spanMinutes, stepMinutes * MINUTE_MS);
+    if (windows) return windows;
   }
   return [];
+}
+
+function buildTimeWindowsForStep(earliestTimestampMs, latestTimestampMs, spanMinutes, stepMs) {
+  const spanMs = Math.max(spanMinutes * MINUTE_MS, stepMs);
+  // 分単位の区切りは UTC と JST で同じ位置になる。epoch から切ると、表示上も分ちょうどに揃う。
+  const firstEndMs = alignDown(earliestTimestampMs, stepMs) + stepMs;
+  const lastEndMs = alignDown(latestTimestampMs, stepMs) + stepMs;
+  const windowCount = Math.round((lastEndMs - firstEndMs) / stepMs) + 1;
+  if (!Number.isFinite(windowCount) || windowCount > MAX_WINDOWS) return null;
+
+  return Array.from({ length: windowCount }, (_, index) => {
+    const endMs = firstEndMs + index * stepMs;
+    return { startMs: endMs - spanMs, endMs, stepMs };
+  });
 }
 
 export function countIpRequestsByWindow(ipRequests, timeWindows) {

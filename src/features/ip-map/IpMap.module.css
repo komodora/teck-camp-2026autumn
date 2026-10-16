@@ -33,6 +33,12 @@
   gap: 16px;
 }
 
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
 .viewToggle {
   display: flex;
   gap: 8px;
@@ -156,9 +162,41 @@
   border-radius: 50%;
   background: color-mix(in srgb, currentColor 16%, transparent);
   cursor: pointer;
+  /*
+   * Marker が opacity と transform を毎フレーム書き換えるので、出入りの演出は大きさと filter で付ける。
+   * scale は transform の外側に掛かり、地図の左上を基準に位置ごと伸び縮みして、円が左上から飛んでくる。
+   * 大きさなら Marker の translate(-50%, -50%) が中心を保つ。
+   */
+  animation: circle-enter 300ms ease-out;
   transition:
-    width 400ms ease,
-    height 400ms ease;
+    width 400ms ease-out,
+    height 400ms ease-out,
+    filter 300ms ease-in;
+}
+
+.leaving {
+  /* 半径はインラインの style で付けているので上書きする。 */
+  width: 0 !important;
+  height: 0 !important;
+  filter: opacity(0);
+  pointer-events: none;
+  transition:
+    width 300ms ease-in,
+    height 300ms ease-in,
+    filter 300ms ease-in;
+}
+
+@keyframes circle-enter {
+  from {
+    width: 0;
+    height: 0;
+    filter: opacity(0);
+  }
+}
+
+/* 地球儀の裏側に回った円は見えないので、手前の地表のクリックを横取りしない。 */
+.circle:global(.maplibregl-marker-covered) {
+  pointer-events: none;
 }
 
 .unlocated {

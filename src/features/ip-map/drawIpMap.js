@@ -1,9 +1,13 @@
 import { Map as MapLibreMap, Marker, NavigationControl, Popup } from "maplibre-gl";
 import { countryName } from "../../../locateIpv4.js";
 import { formatCount } from "../../lib/format.js";
+import { createCameraFollow } from "./cameraFollow.js";
+import { overviewZoom } from "./globeZoom.js";
 import styles from "./IpMap.module.css";
 
 const MIN_CIRCLE_RADIUS = 7;
+// 消える円は縮みながら薄れてから外す。IpMap.module.css の .leaving と同じ長さにする。
+const LEAVE_MS = 300;
 const MAX_CIRCLE_RADIUS = 40;
 const CLIENT_ERROR_COLOR = "#c81e1e";
 const SUCCESS_COLOR = "#1f8a3b";
@@ -61,6 +65,9 @@ export function drawIpMap(container) {
   });
   map.addControl(new NavigationControl({ visualizePitch: false }), "top-right");
 
+  let notifyFollowInterrupted = () => {};
+  const follow = createCameraFollow(map, { onInterrupted: () => notifyFollowInterrupted() });
+
   const markerByKey = new Map();
   let markers = [];
   let pendingCircles = [];
@@ -116,6 +123,16 @@ export function drawIpMap(container) {
       radiusBasisCount = nextRadiusBasisCount;
       applyCircles();
     },
+    followHotspot(hotspot, options) {
+      if (!mapLoaded) return;
+      follow.setTarget(hotspot, options);
+    },
+    setFollowEnabled(enabled) {
+      follow.setEnabled(enabled);
+    },
+    onFollowInterrupted(callback) {
+      notifyFollowInterrupted = callback;
+    },
     setProjection(projection) {
       pendingProjection = projection;
       if (!mapLoaded) return;
@@ -129,6 +146,7 @@ export function drawIpMap(container) {
       applyProjection();
     },
     destroy() {
+      follow.destroy();
       map.remove();
     },
   };
@@ -144,6 +162,8 @@ function syncCircleMarkers(map, markerByKey, circles, radiusBasisCount) {
     const radius = circleRadius(circle.count, radiusBasisCount);
     const existing = markerByKey.get(key);
     if (existing) {
+      // 消えかけの円がまた現れたら、外さずに戻す。
+      cancelLeaving(existing);
       updateCircleMarker(existing, circle, radius);
       continue;
     }
@@ -151,9 +171,12 @@ function syncCircleMarkers(map, markerByKey, circles, radiusBasisCount) {
   }
 
   for (const [key, item] of markerByKey) {
-    if (nextKeys.has(key)) continue;
-    item.marker.remove();
-    markerByKey.delete(key);
+    if (nextKeys.has(key) || item.leavingTimer) continue;
+    item.marker.getElement().classList.add(styles.leaving);
+    item.leavingTimer = window.setTimeout(() => {
+      item.marker.remove();
+      markerByKey.delete(key);
+    }, LEAVE_MS);
   }
 
   return sorted.map((circle) => markerByKey.get(`${circle.ip}:${circle.statusClass}`));
@@ -190,10 +213,11 @@ function fitLngLats(map, lngLats) {
   const latitudeFraction = Math.max(mercatorY(south) - mercatorY(north), 1 / 360);
   const zoomX = Math.log2(width / (WORLD_PIXELS_AT_ZOOM_ZERO * longitudeFraction));
   const zoomY = Math.log2(height / (WORLD_PIXELS_AT_ZOOM_ZERO * latitudeFraction));
-  map.jumpTo({
-    center: [wrapLongitude((west + east) / 2), (south + north) / 2],
-    zoom: Math.min(4, zoomX, zoomY),
-  });
+  const center = [wrapLongitude((west + east) / 2), (south + north) / 2];
+  const fittedZoom = Math.min(4, zoomX, zoomY);
+  // 世界中に散らばると平面地図の計算では地球儀が枠の半分ほどに縮む。地球儀は少なくとも短辺いっぱいに見せる。
+  const zoom = map.getProjection()?.type === "globe" ? Math.max(fittedZoom, overviewZoom(map, center[1])) : fittedZoom;
+  map.jumpTo({ center, zoom });
 }
 
 function mercatorY(latitude) {
@@ -211,20 +235,28 @@ function longitudeNear(longitude, anchorLongitude) {
   return anchorLongitude + delta;
 }
 
+function cancelLeaving(item) {
+  if (!item.leavingTimer) return;
+  window.clearTimeout(item.leavingTimer);
+  item.leavingTimer = 0;
+  item.marker.getElement().classList.remove(styles.leaving);
+}
+
 function createCircleMarker(map, circle, radius) {
   const element = document.createElement("button");
   element.type = "button";
   element.className = styles.circle;
   paintCircleElement(element, circle, radius);
 
-  const marker = new Marker({ element, anchor: "center" })
+  // 地球儀の裏側は MapLibre が毎フレーム opacityWhenCovered を当てる。自動回転の途中でも透けないよう 0 にする。
+  const marker = new Marker({ element, anchor: "center", opacityWhenCovered: 0 })
     .setLngLat(circleLngLat(circle))
     .setPopup(
       new Popup({ className: "ip-popup-wrap", offset: radius, maxWidth: "260px" }).setHTML(popupHtml(circle)),
     )
     .addTo(map);
 
-  return { marker, radius, origin: circleLngLat(circle) };
+  return { marker, radius, origin: circleLngLat(circle), leavingTimer: 0 };
 }
 
 function updateCircleMarker(item, circle, radius) {
@@ -247,7 +279,7 @@ function placeCircles(map, markers) {
   if (map.getZoom() < OVERLAP_SEPARATION_MIN_ZOOM) {
     for (const item of markers) {
       item.marker.setLngLat(item.origin);
-      setCircleVisible(map, item);
+      closeHiddenPopup(map, item);
     }
     return;
   }
@@ -256,7 +288,7 @@ function placeCircles(map, markers) {
   for (const item of markers) {
     if (!isOnVisibleSurface(map, item.origin)) {
       item.marker.setLngLat(item.origin);
-      setCircleVisible(map, item);
+      closeHiddenPopup(map, item);
       continue;
     }
 
@@ -272,15 +304,14 @@ function placeCircles(map, markers) {
     }
     placed.push({ point, radius: item.radius });
     item.marker.setLngLat(map.unproject([point.x, point.y]));
-    setCircleVisible(map, item);
+    closeHiddenPopup(map, item);
   }
 }
 
-function setCircleVisible(map, item) {
-  const visible = isOnVisibleSurface(map, item.marker.getLngLat());
-  item.marker.getElement().style.visibility = visible ? "visible" : "hidden";
+// 円の表示・非表示は Marker の opacityWhenCovered に任せる。裏側へ回った円の吹き出しだけ閉じる。
+function closeHiddenPopup(map, item) {
   const popup = item.marker.getPopup();
-  if (!visible && popup?.isOpen()) popup.remove();
+  if (popup?.isOpen() && !isOnVisibleSurface(map, item.marker.getLngLat())) popup.remove();
 }
 
 function isOnVisibleSurface(map, lngLat) {
@@ -305,9 +336,10 @@ function circleLngLat(circle) {
   return [circle.longitude, circle.latitude];
 }
 
+// 1つのIPが全体の大半を占めると、面積比例では他の円がすべて最小になる。対数で差を残す。
 function circleRadius(count, largestCount) {
   if (largestCount <= 1) return MIN_CIRCLE_RADIUS;
-  const scale = Math.sqrt(count / largestCount);
+  const scale = Math.log1p(count) / Math.log1p(largestCount);
   return MIN_CIRCLE_RADIUS + (MAX_CIRCLE_RADIUS - MIN_CIRCLE_RADIUS) * scale;
 }
 

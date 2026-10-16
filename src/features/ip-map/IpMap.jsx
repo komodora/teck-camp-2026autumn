@@ -4,6 +4,7 @@ import { countryName, loadIpv4LocationTable } from "../../../locateIpv4.js";
 import { formatCount, formatMinuteRange } from "../../lib/format.js";
 import { drawIpMap } from "./drawIpMap.js";
 import { planFollowTargets } from "./followPlan.js";
+import { PlaybackTimeline } from "./PlaybackTimeline.jsx";
 import { trackHotspots } from "./hotspot.js";
 import styles from "./IpMap.module.css";
 import { plotIpSummaries } from "./plotIpSummaries.js";
@@ -261,6 +262,16 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
         <button type="button" className={styles.playButton} onClick={handlePlaybackClick} disabled={!canPlay}>
           {isPlaying ? "停止" : "再生"}
         </button>
+        <p className={styles.windowLabel}>
+          {playbackLabel(activeWindow, safeIndex, timeWindows.length, earliestTimestampMs)}
+        </p>
+        <PlaybackTimeline
+          ipRequests={ipRequests}
+          timeWindows={timeWindows}
+          activeIndex={safeIndex}
+          spanMinutes={spanMinutes}
+          onSeek={showWindowAt}
+        />
         <label className={styles.scrubber}>
           表示する時間
           <input
@@ -274,9 +285,6 @@ export function IpMap({ ipSummaries, ipRequests, earliestTimestampMs, latestTime
             aria-valuetext={playbackLabel(activeWindow, safeIndex, timeWindows.length, earliestTimestampMs)}
           />
         </label>
-        <p className={styles.windowLabel}>
-          {playbackLabel(activeWindow, safeIndex, timeWindows.length, earliestTimestampMs)}
-        </p>
       </div>
       <p className={styles.status}>{mapStatus}</p>
       <div

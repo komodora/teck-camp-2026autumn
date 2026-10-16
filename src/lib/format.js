@@ -41,6 +41,12 @@ export function formatMinuteRange(startMs, endMs) {
   return `${start.date} ${start.time} 〜 ${end.date} ${end.time}`;
 }
 
+// 時間帯グラフの目盛り。日付が変わる 0:00 は日付で見せる。
+export function formatClock(timestampMs) {
+  const { date, time } = minuteParts(timestampMs);
+  return time === "00:00" ? date.slice(5) : time;
+}
+
 export function formatTimeRange(earliestTimestampMs, latestTimestampMs) {
   if (earliestTimestampMs === null || latestTimestampMs === null) return "—";
 

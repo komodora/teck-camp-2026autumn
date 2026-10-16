@@ -1,0 +1,71 @@
+.panel {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.panel h2 {
+  margin: 0 0 14px;
+  font-size: 1.25rem;
+}
+
+.empty {
+  margin: 0;
+  padding: 28px 0 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.tableScroll {
+  overflow-x: auto;
+}
+
+.panel table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 480px;
+}
+
+.panel th,
+.panel td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.panel th {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.panel td {
+  font-variant-numeric: tabular-nums;
+}
+
+.numeric {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ip {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 0.92rem;
+}
+
+.detail {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.detail a {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}

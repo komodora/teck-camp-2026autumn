@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { analyzeAccessLogRecords } from "../../../analyzeAlbAccessLog.js";
+import { IpList } from "../ip-list";
 import { IpMap } from "../ip-map";
 import { Ranking } from "../ranking";
 import { Summary } from "../summary";
@@ -59,6 +60,7 @@ export function Report() {
             earliestTimestampMs={analysis.earliestTimestampMs}
             latestTimestampMs={analysis.latestTimestampMs}
           />
+          <IpList analysis={analysis} />
           <Ranking analysis={analysis} />
         </section>
       )}

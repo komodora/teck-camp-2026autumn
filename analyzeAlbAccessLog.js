@@ -79,6 +79,48 @@ function summarizeEntries(entries, skippedLineCount) {
   };
 }
 
+export function buildIpDetail(records, ip) {
+  const rankingByRequest = new Map();
+  const statusCounts = new Map();
+  const clientErrorTimestampsMs = [];
+  let status2xxCount = 0;
+  let status4xxCount = 0;
+  let earliestTimestampMs = null;
+  let latestTimestampMs = null;
+
+  for (const record of records) {
+    const entry = entryFromAccessLogRecord(record);
+    if (!entry || entry.clientIp !== ip) continue;
+
+    if (isSuccessStatus(entry.elbStatusCode)) {
+      status2xxCount += 1;
+      continue;
+    }
+    if (!isClientErrorStatus(entry.elbStatusCode)) continue;
+
+    status4xxCount += 1;
+    incrementCount(statusCounts, entry.elbStatusCode);
+    addClientError(rankingByRequest, entry);
+    if (entry.timestampMs !== null) {
+      clientErrorTimestampsMs.push(entry.timestampMs);
+      earliestTimestampMs = earlierTimestamp(earliestTimestampMs, entry.timestampMs);
+      latestTimestampMs = laterTimestamp(latestTimestampMs, entry.timestampMs);
+    }
+  }
+
+  return {
+    ip,
+    status2xxCount,
+    status4xxCount,
+    clientErrorCount: status4xxCount,
+    earliestTimestampMs,
+    latestTimestampMs,
+    statusCounts: toStatusCountList(statusCounts),
+    ranking: [...rankingByRequest.values()].sort(compareRankingRows),
+    clientErrorTimestampsMs,
+  };
+}
+
 function entryFromAccessLogRecord(record) {
   if (typeof record.alb_status_code !== "number") return null;
   if (typeof record.http_request !== "string") return null;

@@ -54,7 +54,12 @@ export function countIpRequestsByWindow(ipRequests, timeWindows) {
     if (leaving) {
       for (const summary of leaving.values()) addCounts(running, summary.ip, summary, -1);
     }
-    return [...running.values()].map((summary) => ({ ...summary }));
+    // latest*Count はこの時点で新しく数えた刻みの件数。円は直近の合計、波紋は新しく来た分で出す。
+    return [...running.values()].map((summary) => ({
+      ...summary,
+      latest2xxCount: entering.get(summary.ip)?.status2xxCount ?? 0,
+      latest4xxCount: entering.get(summary.ip)?.status4xxCount ?? 0,
+    }));
   });
 }
 

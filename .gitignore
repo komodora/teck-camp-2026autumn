@@ -4,3 +4,4 @@ dist
 data/ipv4-city.bin.gz
 data/uploads
 logs
+.env

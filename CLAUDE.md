@@ -19,6 +19,8 @@ npm run preview   # ビルド結果をプレビュー
 
 Lint・テストの仕組みはない。
 
+チャット機能(`/report` 内)を使うには、`ANTHROPIC_API_KEY` を `.env` に設定しておく必要がある(未設定でもアップロード・集計・地図機能は動く)。
+
 ### 位置情報データの準備(初回のみ)
 
 `data/ipv4-city.bin.gz` はリポジトリに含まれないため、`npm run dev` の前に作る必要がある。
@@ -46,12 +48,16 @@ ALBアクセスログをアップロードし、400系(クライアントエラ�
    - `buildIpDetail(records, ip)`: IP詳細ページ向け。指定IPの400系のみを対象に、パス別ランキング・時刻帯用の生タイムスタンプ配列・期間を算出する。
    - いずれも `server/ingest/structureAlbAccessLog.js` とは別物(あちらはログ行→JSONレコード、こちらはJSONレコード→表示用集計)なので、どちらを触るべきか注意する。
 
+### チャット(自然言語でのQ&A)
+
+`/report` 画面に埋め込まれた `src/features/chat`(`Chat.jsx`)が、質問と会話履歴を `POST /chat`(`server/chat/`)へ送る。サーバー側は `GET /access-logs` と同じく毎回 `store.loadAll()` で全レコードを読み直し、`analyzeAlbAccessLog.js` の `analyzeAccessLogRecords` で集計し、上位IP(4xx件数降順、上位50件)に `locateIpv4.js` で位置情報を付与して、Claudeへのプロンプトコンテキストを組み立てる(`server/chat/buildAnalysisContext.js`)。IPv4位置テーブルはモジュールレベルで一度だけ読み込んでメモ化する。`server/chat/askClaude.js` が `@anthropic-ai/sdk` を使って `claude-sonnet-5-5` にこのコンテキストと質問を渡し、日本語の回答を1件返す。画面側は会話履歴をReact stateで保持するだけで、サーバー側に集計結果を保存することはしない。
+
 ### 画面構成とルーティング
 
 React Router等は使わず、`src/pages.js` が `window.location.pathname` を見てページ種別(`"upload"` / `"report"` / `"ip-detail"`)を判定し、`src/App.jsx` がそれに応じてコンポーネントを切り替えるだけの自作ルータ。画面遷移は通常の `<a href>` によるフルページ遷移で、クライアントサイドの状態は画面間で共有されない(各ページが自分で保存済みログを取得し直す)。Viteのdev/previewはSPA fallbackのため、どのパスでも `index.html` が返る。
 
 - `/`: `src/features/log-upload` (アップロード)
-- `/report`: `src/features/report` (`Report.jsx` が `Summary` → `IpMap` → `IpList` → `Ranking` を束ねる)
+- `/report`: `src/features/report` (`Report.jsx` が `Summary` → `IpMap` → `IpList` → `Ranking` → `Chat` を束ねる)
 - `/report/ip/<IP>`: `src/features/ip-detail` (`IpDetail.jsx` が、そのIPの `Ranking`・時刻帯ヒストグラム・位置地図を束ねる)
 
 `src/features/*` は機能ごとのディレクトリで、各ディレクトリは `index.js` でpublicなコンポーネントだけを再exportする(内部実装ファイルを他の機能から直接importしない)。
